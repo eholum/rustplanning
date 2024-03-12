@@ -20,10 +20,37 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod tree;
-pub mod rrt;
+// Qgoal //region that identifies success
+// Counter = 0 //keeps track of iterations
+// lim = n //number of iterations algorithm should run for
+// G(V,E) //Graph containing edges and vertices, initialized as empty
+// While counter < lim:
+//     Xnew  = RandomPosition()
+//     if IsInObstacle(Xnew) == True:
+//         continue
+//     Xnearest = Nearest(G(V,E),Xnew) //find nearest vertex
+//     Link = Chain(Xnew,Xnearest)
+//     G.append(Link)
+//     if Xnew in Qgoal:
+//         Return G
+// Return G
 
-pub mod prelude {
-    pub use crate::tree::*;
-    pub use crate::rrt::*;
+use crate::tree::Distance;
+use crate::tree::Tree;
+use std::hash::Hash;
+
+/// Basic RRT implementation.
+pub fn rrt<T, FR, FV, FN, FS>(
+    start: &T,
+    mut sample: FR,
+    mut is_valid: FV,
+    mut success: FS,
+) -> Option<Vec<T>>
+where
+    T: Eq + Clone + Hash + Distance,
+    FR: FnMut() -> T,
+    FV: FnMut(&T) -> bool,
+    FS: FnMut(&T) -> bool,
+{
+    Some(Vec::new())
 }

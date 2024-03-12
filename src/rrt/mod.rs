@@ -20,10 +20,4 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod tree;
 pub mod rrt;
-
-pub mod prelude {
-    pub use crate::tree::*;
-    pub use crate::rrt::*;
-}

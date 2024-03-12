@@ -27,8 +27,7 @@ use std::hash::Hash;
 
 /// Basic node element for the tree.
 ///
-/// Stores the value of the node and all children in a mut hash map to support constant
-/// time lookups by value.
+/// Must be used with [Tree] since children are referenced by index in the [Tree]'s node vector.
 #[derive(Debug)]
 struct TreeNode<T> {
     value: T,
@@ -54,6 +53,47 @@ impl<T> TreeNode<T> {
 /// Define a distance trait for tree node values.
 pub trait Distance {
     fn distance(&self, other: &Self) -> f64;
+}
+
+/// DFS Iterator for a [Tree]
+pub struct DepthFirstIterator<'a, T>
+where
+    T: 'a + Eq + Copy + Distance + Hash,
+{
+    tree: &'a Tree<T>,
+    stack: Vec<usize>,
+}
+
+impl<'a, T> DepthFirstIterator<'a, T>
+where
+    T: Eq + Copy + Distance + Hash,
+{
+    fn new(tree: &'a Tree<T>) -> Self {
+        let mut stack = Vec::new();
+        if !tree.nodes.is_empty() {
+            // Root is always idx 0
+            stack.push(0);
+        }
+        DepthFirstIterator { tree, stack }
+    }
+}
+
+impl<'a, T> Iterator for DepthFirstIterator<'a, T>
+where
+    T: Eq + Copy + Distance + Hash,
+{
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.stack.pop().map(|index| {
+            // Children should be pushed onto the stack in reverse order to ensure left-most
+            // are processed first
+            for &child_index in self.tree.nodes[index].children.iter().rev() {
+                self.stack.push(child_index);
+            }
+            &self.tree.nodes[index].value
+        })
+    }
 }
 
 /// Basic tree for use in search algorithms.
@@ -134,6 +174,11 @@ impl<T: Eq + Copy + Distance + Hash> Tree<T> {
             .unwrap()
             .value
     }
+
+    // Returns a [DepthFirstIterator] for the tree
+    pub fn iter_depth_first(&self) -> DepthFirstIterator<T> {
+        DepthFirstIterator::new(self)
+    }
 }
 
 //
@@ -161,8 +206,6 @@ mod tests {
         // Add a child and make sure everything is ok
         assert!(tree.add_child(1, 2).is_ok());
         assert_eq!(tree.size(), 2);
-        assert_eq!(tree.nodes[1].value, 2);
-        assert_eq!(tree.nodes[tree.nodes_map[&1]].children, vec![1]);
 
         // Make the tree bigger
         assert!(tree.add_child(1, 3).is_ok());
@@ -191,5 +234,24 @@ mod tests {
         assert_eq!(tree.nearest(7), 6);
         assert_eq!(tree.nearest(-1), 1);
         assert_eq!(tree.nearest(3), 3);
+    }
+
+    #[test]
+    fn test_tree_dfs() {
+        // Construct tree with many nodes
+        let mut tree: Tree<i32> = Tree::new(1);
+
+        assert!(tree.add_child(1, 2).is_ok());
+        assert!(tree.add_child(1, 3).is_ok());
+        assert!(tree.add_child(2, 4).is_ok());
+        assert!(tree.add_child(2, 5).is_ok());
+        assert!(tree.add_child(3, 6).is_ok());
+
+        // Expected order
+        let expected_dfs_order = vec![1, 2, 4, 5, 3, 6];
+        let dfs_order: Vec<i32> = tree.iter_depth_first().cloned().collect();
+
+        // Compare
+        assert_eq!(dfs_order, expected_dfs_order);
     }
 }

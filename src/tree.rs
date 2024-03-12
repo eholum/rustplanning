@@ -92,22 +92,9 @@ impl<T: Eq + Copy + Distance + Hash> Tree<T> {
         }
     }
 
-    /// Returns the closest element to the specified value
-    pub fn nearest(self, val: T) -> T {
-        self.nodes
-            .into_iter()
-            .min_by(|a, b| {
-                let da = val.distance(&a.value);
-                let db = val.distance(&b.value);
-                da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .unwrap()
-            .value
-    }
-
     /// Adds the value to the specified node's children
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// If the parent is not found in the tree.
     /// If the child is already in the tree.
@@ -128,5 +115,81 @@ impl<T: Eq + Copy + Distance + Hash> Tree<T> {
         }
 
         Ok(())
+    }
+
+    // Return the size of the tree
+    pub fn size(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Returns the closest element to the specified value
+    pub fn nearest(&self, val: T) -> T {
+        self.nodes
+            .iter()
+            .min_by(|a, b| {
+                let da = val.distance(&a.value);
+                let db = val.distance(&b.value);
+                da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .unwrap()
+            .value
+    }
+}
+
+//
+// Unit tests
+//
+
+// Needed for distancing points on a plane
+impl Distance for i32 {
+    fn distance(&self, other: &Self) -> f64 {
+        (self - other).abs().into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tree_children() {
+        // Construct tree with a single node
+        let mut tree: Tree<i32> = Tree::new(1);
+        assert_eq!(tree.size(), 1);
+        assert_eq!(tree.nodes[0].value, 1);
+
+        // Add a child and make sure everything is ok
+        assert!(tree.add_child(1, 2).is_ok());
+        assert_eq!(tree.size(), 2);
+        assert_eq!(tree.nodes[1].value, 2);
+        assert_eq!(tree.nodes[tree.nodes_map[&1]].children, vec![1]);
+
+        // Make the tree bigger
+        assert!(tree.add_child(1, 3).is_ok());
+        assert!(tree.add_child(2, 4).is_ok());
+        assert_eq!(tree.size(), 4);
+
+        // Add an existing child and everything is not ok
+        assert!(tree.add_child(1, 2).is_err());
+
+        // Add to a nonexistent parent and everything is not ok
+        assert!(tree.add_child(3, 2).is_err());
+    }
+
+    #[test]
+    fn test_tree_get_nearest() {
+        // Construct tree with many nodes
+        let mut tree: Tree<i32> = Tree::new(1);
+
+        assert!(tree.add_child(1, 2).is_ok());
+        assert!(tree.add_child(1, 3).is_ok());
+        assert!(tree.add_child(2, 4).is_ok());
+        assert!(tree.add_child(2, 5).is_ok());
+        assert!(tree.add_child(2, 6).is_ok());
+
+        // Make assertions
+        assert_eq!(tree.nearest(7), 6);
+        assert_eq!(tree.nearest(-1), 1);
+        assert_eq!(tree.nearest(3), 3);
     }
 }

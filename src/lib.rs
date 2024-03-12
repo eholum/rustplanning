@@ -21,9 +21,9 @@
 // SOFTWARE.
 
 pub mod tree;
-pub mod rrt;
+pub mod planning;
 
 pub mod prelude {
     pub use crate::tree::*;
-    pub use crate::rrt::*;
+    pub use crate::planning::*;
 }

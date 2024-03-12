@@ -34,12 +34,16 @@ struct TreeNode<T> {
 
     // Maintains a list of pointers to the children's location in the parent's vector
     children: Vec<usize>,
+
+    // Location of the nodes parent, if available
+    parent: Option<usize>,
 }
 
 impl<T> TreeNode<T> {
-    fn new(val: T) -> Self {
+    fn new(val: T, parent: Option<usize>) -> Self {
         TreeNode {
             value: val,
+            parent: parent,
             children: Vec::new(),
         }
     }
@@ -117,14 +121,15 @@ where
 }
 
 impl<T: Eq + Copy + Distance + Hash> Tree<T> {
+
+    /// Construct a new tree with the specified value as the root node.
     pub fn new(val: T) -> Self {
-        let root_idx: usize = 0;
-        let root_node = TreeNode::new(val);
+        let root_node = TreeNode::new(val, None);
         let mut nodes = Vec::new();
         let mut nodes_map = HashMap::new();
 
         nodes.push(root_node);
-        nodes_map.insert(val, root_idx);
+        nodes_map.insert(val, 0);
 
         Tree {
             nodes: nodes,
@@ -139,7 +144,7 @@ impl<T: Eq + Copy + Distance + Hash> Tree<T> {
     /// If the parent is not found in the tree.
     /// If the child is already in the tree.
     pub fn add_child(&mut self, parent: T, child: T) -> Result<(), String> {
-        // Cannot ad
+        // Cannot duplicate children
         if self.nodes_map.contains_key(&child) {
             return Err("The child is already in the tree".to_string());
         }
@@ -147,7 +152,7 @@ impl<T: Eq + Copy + Distance + Hash> Tree<T> {
         if let Some(&parent_idx) = self.nodes_map.get(&parent) {
             // Append the child node to the nodes vector and note the location in the map.
             let child_idx = self.nodes.len();
-            self.nodes.push(TreeNode::new(child));
+            self.nodes.push(TreeNode::new(child, Some(parent_idx)));
             self.nodes_map.insert(child, child_idx);
             self.nodes[parent_idx].add_child(child_idx);
         } else {
@@ -163,7 +168,7 @@ impl<T: Eq + Copy + Distance + Hash> Tree<T> {
     }
 
     /// Returns the closest element to the specified value
-    pub fn nearest(&self, val: T) -> T {
+    pub fn nearest(&self, val: &T) -> T {
         self.nodes
             .iter()
             .min_by(|a, b| {
@@ -175,9 +180,35 @@ impl<T: Eq + Copy + Distance + Hash> Tree<T> {
             .value
     }
 
-    // Returns a [DepthFirstIterator] for the tree
+    /// Returns a [DepthFirstIterator] for the tree
     pub fn iter_depth_first(&self) -> DepthFirstIterator<T> {
         DepthFirstIterator::new(self)
+    }
+
+    /// Returns a path to the root given the specified end point
+    ///
+    /// # Errors
+    ///
+    /// If the specified node is not found in the Tree
+    pub fn path(&self, end: &T) -> Result<Vec<T>, String> {
+        // Must be a valid node
+        if !self.nodes_map.contains_key(&end) {
+            return Err("Node is not present in tree".to_string());
+        }
+
+        // Build the path from end to beginning
+        let mut path: Vec<T> = Vec::new();
+
+        // Loop until you get to the root
+        let mut cur_idx = Some(self.nodes_map[&end]);
+        while let Some(idx) = cur_idx {
+            path.push(self.nodes[idx].value);
+            cur_idx = self.nodes[idx].parent;
+        }
+
+        // Reverse it to get the path in order
+        path.reverse();
+        Ok(path)
     }
 }
 
@@ -231,9 +262,9 @@ mod tests {
         assert!(tree.add_child(2, 6).is_ok());
 
         // Make assertions
-        assert_eq!(tree.nearest(7), 6);
-        assert_eq!(tree.nearest(-1), 1);
-        assert_eq!(tree.nearest(3), 3);
+        assert_eq!(tree.nearest(&7), 6);
+        assert_eq!(tree.nearest(&-1), 1);
+        assert_eq!(tree.nearest(&3), 3);
     }
 
     #[test]
@@ -253,5 +284,30 @@ mod tests {
 
         // Compare
         assert_eq!(dfs_order, expected_dfs_order);
+    }
+
+    #[test]
+    fn test_tree_compute_back_path() {
+        // Construct tree with many nodes
+        let mut tree: Tree<i32> = Tree::new(1);
+
+        assert!(tree.add_child(1, 2).is_ok());
+        assert!(tree.add_child(1, 3).is_ok());
+        assert!(tree.add_child(2, 4).is_ok());
+        assert!(tree.add_child(2, 5).is_ok());
+        assert!(tree.add_child(3, 7).is_ok());
+        assert!(tree.add_child(5, 6).is_ok());
+
+        // Verify
+        let ep1 = vec![1, 2, 5, 6];
+        let cp1: Vec<i32> = tree.path(&6).unwrap();
+        assert_eq!(cp1, ep1);
+
+        let ep2 = vec![1, 3, 7];
+        let cp2: Vec<i32> = tree.path(&7).unwrap();
+        assert_eq!(cp2, ep2);
+
+        // Invalid node
+        assert!(tree.path(&8).is_err());
     }
 }

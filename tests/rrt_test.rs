@@ -95,7 +95,7 @@ fn test_rrt() {
     let success = |p: &Point2D| p.distance(&goal) < success_distance;
 
     let result = rrt(
-        &start, sample, extend, is_valid, success, 10000, // Max iterations
+        &start, sample, extend, is_valid, success, 10000,
     );
 
     assert!(result.is_ok(), "Expected Ok result, got Err");

@@ -24,6 +24,34 @@ use crate::tree::Distance;
 use crate::tree::Tree;
 use std::hash::Hash;
 
+/// Attempts to randomly extend the tree in an arbitrary direction.
+/// Return the new point and the nearest neighbor, if available.
+/// Otherwise return None.
+fn extend_tree<T, FS, FE, FV>(
+    tree: &Tree<T>,
+    sample: &mut FS,
+    extend: &mut FE,
+    is_valid: &mut FV,
+) -> Option<(T, T)>
+where
+    T: Eq + Copy + Hash + Distance,
+    FS: FnMut() -> T,
+    FE: FnMut(&T, &T) -> T,
+    FV: FnMut(&T) -> bool,
+{
+    // Sample the grab the nearest point, and extend in that direction
+    let s = sample();
+    let nearest = tree.nearest_neighbor(&s);
+    let new_point = extend(&nearest, &s);
+
+    // If it is an invalid point try again
+    if !is_valid(&new_point) {
+        return None;
+    }
+
+    Some((new_point, nearest.clone()))
+}
+
 /// Basic RRT implementation.
 ///
 /// Will attempt to compute a path using the RRT algorithm given the specified start pose
@@ -38,7 +66,7 @@ use std::hash::Hash;
 /// - `success`: Determines whether or not we have reached the goal
 /// - `max_iterations`: Maximum number of random samples to attempt before the search fails
 ///
-/// /// # Returns
+/// # Returns
 /// Returns a `Result` containing either:
 /// - `Ok(Vec<T>)`: A vector of points of type `T` representing the path from the start to a point
 ///                 satisfying the `success` condition, if such a path is found within the given number
@@ -68,18 +96,14 @@ where
     let mut tree = Tree::new(start.clone());
 
     for _ in 0..max_iterations {
-        // Sample the grab the nearest point, and extend in that direction
-        let s = sample();
-        let nearest = tree.nearest(&s);
-        let new_point = extend(&nearest, &s);
-
-        // If it is an invalid point try again
-        if !is_valid(&new_point) {
-            continue;
-        }
+        let (new_point, nearest) = match extend_tree(&tree, &mut sample, &mut extend, &mut is_valid)
+        {
+            Some((new_point, nearest)) => (new_point, nearest),
+            None => continue,
+        };
 
         // Otherwise it's valid so add it to the tree
-        if let Ok(_) = tree.add_child(nearest, new_point) {
+        if let Ok(_) = tree.add_child(&nearest, new_point) {
             // We're good
         } else {
             // Then the child wasn't added for some reason so just try again

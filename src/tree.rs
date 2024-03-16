@@ -22,7 +22,7 @@
 
 //! Basic tree structure to store vertices with arbitrary data types.
 //! Types must implement a distance trait to enable determination of nearest neighbors.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 /// Basic node element for the tree.
@@ -39,6 +39,9 @@ struct Node<T> {
     // Maintains a list of pointers to the children's location in the parent's vector.
     // Using a vector to maintain order for tree traversals.
     children: Vec<usize>,
+
+    // Set of nearest neighbors.
+    neighbors: HashSet<usize>,
 }
 
 impl<T> Node<T> {
@@ -47,6 +50,7 @@ impl<T> Node<T> {
             value: value,
             parent: parent,
             children: Vec::new(),
+            neighbors: HashSet::new(),
         }
     }
 }
@@ -180,6 +184,49 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
             .value
     }
 
+    /// Finds all nodes that are within the specified radius and sets the
+    /// neighbors list accordingly. The node must already be in the tree.
+    ///
+    /// Returns the closet element to the specified value.
+    ///
+    /// # Errors
+    ///
+    /// If the provided `T` value is not in the tree.
+    pub fn nearest_neighbors(&mut self, val: &T, radius: f64) -> Result<&T, String> {
+        let node_idx: usize = *self.nodes_map.get(val)
+            .ok_or("Specified value is not present in the tree".to_string())?;
+
+        // First iterate over all nodes to identify all neighbors
+        let mut min_distance = std::f64::MAX;
+        let mut nearest_idx = node_idx;
+        let mut neighbors = Vec::new();
+        for (i, check) in self.nodes.iter().enumerate() {
+            // Skip the current node
+            if i == node_idx {
+                continue;
+            }
+
+            // Compute and check distances
+            let distance = val.distance(&check.value);
+            if distance <= radius {
+                neighbors.push(i);
+            }
+            if distance < min_distance {
+                min_distance = distance;
+                nearest_idx = i;
+            }
+        }
+
+        // Then update neighbors sets and identify the nearest.
+        for i in neighbors {
+            print!("ERH TEMP: Node {node_idx} neighbor {i}\n");
+            self.nodes[node_idx].neighbors.insert(i);
+            self.nodes[i].neighbors.insert(node_idx);
+        }
+
+        Ok(&self.nodes[nearest_idx].value)
+    }
+
     /// Returns a [DepthFirstIterator] for the tree
     pub fn iter_depth_first(&self) -> DepthFirstIterator<T> {
         DepthFirstIterator::new(self)
@@ -209,6 +256,15 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         // Reverse it to get the path in order
         path.reverse();
         Ok(path)
+    }
+
+    /// Returns the node with the specified value
+    ///
+    /// Returns None if the specified value is not in the tree.
+    /// Only used for testing.
+    #[allow(dead_code)]
+    fn get_node(&self, val: &T) -> Option<&Node<T>> {
+        self.nodes_map.get(val).and_then(|&index| self.nodes.get(index))
     }
 }
 
@@ -309,5 +365,34 @@ mod tests {
 
         // Invalid node
         assert!(tree.path(&8).is_err());
+    }
+
+    #[test]
+    fn test_tree_nearest_neighbors() {
+        let mut tree: Tree<i32> = Tree::new(1);
+
+        assert!(tree.add_child(&1, 2).is_ok());
+        assert!(tree.add_child(&1, 4).is_ok());
+        assert!(tree.add_child(&2, 5).is_ok());
+        assert!(tree.add_child(&4, 7).is_ok());
+
+        // 5 is the closest to 4.
+        let nearest = *tree.nearest_neighbors(&4, 2.0).unwrap();
+        assert_eq!(nearest, 5);
+
+        // All neighbors should be updated
+        let node_2_neighbors =  &tree.get_node(&2).unwrap().neighbors;
+        let node_4_neighbors =  &tree.get_node(&4).unwrap().neighbors;
+        let node_5_neighbors =  &tree.get_node(&5).unwrap().neighbors;
+
+        assert_eq!(node_2_neighbors.len(), 1);
+        assert_eq!(node_4_neighbors.len(), 2);
+        assert_eq!(node_5_neighbors.len(), 1);
+
+        // We're operating on indexes, not values
+        assert!(node_2_neighbors.contains(tree.nodes_map.get(&4).unwrap()));
+        assert!(node_4_neighbors.contains(tree.nodes_map.get(&2).unwrap()));
+        assert!(node_4_neighbors.contains(tree.nodes_map.get(&5).unwrap()));
+        assert!(node_5_neighbors.contains(tree.nodes_map.get(&4).unwrap()));
     }
 }

@@ -42,6 +42,9 @@ struct Node<T> {
 
     // Set of nearest neighbors.
     neighbors: HashSet<usize>,
+
+    // Optional cost to reach this node.
+    cost: Option<f64>,
 }
 
 impl<T> Node<T> {
@@ -51,6 +54,7 @@ impl<T> Node<T> {
             parent: parent,
             children: Vec::new(),
             neighbors: HashSet::new(),
+            cost: None,
         }
     }
 }
@@ -134,10 +138,7 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         nodes.push(root_node);
         nodes_map.insert(val, 0);
 
-        Tree {
-            nodes,
-            nodes_map,
-        }
+        Tree { nodes, nodes_map }
     }
 
     /// Adds the value to the specified node's children
@@ -193,7 +194,9 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
     ///
     /// If the provided `T` value is not in the tree.
     pub fn nearest_neighbors(&mut self, val: &T, radius: f64) -> Result<&T, String> {
-        let node_idx: usize = *self.nodes_map.get(val)
+        let node_idx: usize = *self
+            .nodes_map
+            .get(val)
             .ok_or("Specified value is not present in the tree".to_string())?;
 
         // First iterate over all nodes to identify all neighbors
@@ -264,7 +267,9 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
     /// Only used for testing.
     #[allow(dead_code)]
     fn get_node(&self, val: &T) -> Option<&Node<T>> {
-        self.nodes_map.get(val).and_then(|&index| self.nodes.get(index))
+        self.nodes_map
+            .get(val)
+            .and_then(|&index| self.nodes.get(index))
     }
 }
 
@@ -381,15 +386,16 @@ mod tests {
         assert_eq!(nearest, 5);
 
         // All neighbors should be updated
-        let node_2_neighbors =  &tree.get_node(&2).unwrap().neighbors;
-        let node_4_neighbors =  &tree.get_node(&4).unwrap().neighbors;
-        let node_5_neighbors =  &tree.get_node(&5).unwrap().neighbors;
+        let node_2_neighbors = &tree.get_node(&2).unwrap().neighbors;
+        let node_4_neighbors = &tree.get_node(&4).unwrap().neighbors;
+        let node_5_neighbors = &tree.get_node(&5).unwrap().neighbors;
 
         assert_eq!(node_2_neighbors.len(), 1);
         assert_eq!(node_4_neighbors.len(), 2);
         assert_eq!(node_5_neighbors.len(), 1);
 
-        // We're operating on indexes, not values
+        // We're operating on indexes, not values, this is a dumb way to validate since
+        // we're not testing interfaces :/
         assert!(node_2_neighbors.contains(tree.nodes_map.get(&4).unwrap()));
         assert!(node_4_neighbors.contains(tree.nodes_map.get(&2).unwrap()));
         assert!(node_4_neighbors.contains(tree.nodes_map.get(&5).unwrap()));

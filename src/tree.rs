@@ -22,7 +22,7 @@
 
 //! Basic tree structure to store vertices with arbitrary data types.
 //! Types must implement a distance trait to enable determination of nearest neighbors.
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Basic node element for the tree.
@@ -40,11 +40,8 @@ struct Node<T> {
     // Using a vector to maintain order for tree traversals.
     children: Vec<usize>,
 
-    // Set of nearest neighbors.
-    neighbors: HashSet<usize>,
-
-    // Optional cost to reach this node.
-    cost: Option<f64>,
+    // Set of nearest neighbors and their distances.
+    neighbors: HashMap<usize, f64>,
 }
 
 impl<T> Node<T> {
@@ -53,8 +50,7 @@ impl<T> Node<T> {
             value: value,
             parent: parent,
             children: Vec::new(),
-            neighbors: HashSet::new(),
-            cost: None,
+            neighbors: HashMap::new(),
         }
     }
 }
@@ -212,7 +208,7 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
             // Compute and check distances
             let distance = val.distance(&check.value);
             if distance <= radius {
-                neighbors.push(i);
+                neighbors.push((i, distance));
             }
             if distance < min_distance {
                 min_distance = distance;
@@ -221,10 +217,9 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         }
 
         // Then update neighbors sets and identify the nearest.
-        for i in neighbors {
-            print!("ERH TEMP: Node {node_idx} neighbor {i}\n");
-            self.nodes[node_idx].neighbors.insert(i);
-            self.nodes[i].neighbors.insert(node_idx);
+        for (i, distance) in neighbors {
+            self.nodes[node_idx].neighbors.insert(i, distance);
+            self.nodes[i].neighbors.insert(node_idx, distance);
         }
 
         Ok(&self.nodes[nearest_idx].value)
@@ -264,12 +259,27 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
     /// Returns the node with the specified value
     ///
     /// Returns None if the specified value is not in the tree.
-    /// Only used for testing.
-    #[allow(dead_code)]
     fn get_node(&self, val: &T) -> Option<&Node<T>> {
         self.nodes_map
             .get(val)
             .and_then(|&index| self.nodes.get(index))
+    }
+
+    /// Returns a list of neighbors by value, along with their distances.
+    ///
+    /// Returns None if the specified value is not in the tree.
+    /// Only used for testing.
+    #[allow(dead_code)]
+    fn get_node_neighbors(&self, val: &T) -> Option<HashMap<T, f64>> {
+        if let Some(node) = self.get_node(val) {
+            let mut neighbors = HashMap::new();
+            for (idx, distance) in node.neighbors.iter() {
+                neighbors.insert(self.nodes[*idx].value.clone(), *distance);
+            }
+            return Some(neighbors);
+        }
+
+        None
     }
 }
 
@@ -286,6 +296,8 @@ impl Distance for i32 {
 
 #[cfg(test)]
 mod tests {
+    use float_cmp::approx_eq;
+
     use super::*;
 
     #[test]
@@ -386,19 +398,28 @@ mod tests {
         assert_eq!(nearest, 5);
 
         // All neighbors should be updated
-        let node_2_neighbors = &tree.get_node(&2).unwrap().neighbors;
-        let node_4_neighbors = &tree.get_node(&4).unwrap().neighbors;
-        let node_5_neighbors = &tree.get_node(&5).unwrap().neighbors;
+        let node_2 = tree.get_node(&2).unwrap();
+        let node_4 = tree.get_node(&4).unwrap();
+        let node_5 = tree.get_node(&5).unwrap();
 
-        assert_eq!(node_2_neighbors.len(), 1);
-        assert_eq!(node_4_neighbors.len(), 2);
-        assert_eq!(node_5_neighbors.len(), 1);
+        assert_eq!(node_2.neighbors.len(), 1);
+        assert_eq!(node_4.neighbors.len(), 2);
+        assert_eq!(node_5.neighbors.len(), 1);
 
-        // We're operating on indexes, not values, this is a dumb way to validate since
-        // we're not testing interfaces :/
-        assert!(node_2_neighbors.contains(tree.nodes_map.get(&4).unwrap()));
-        assert!(node_4_neighbors.contains(tree.nodes_map.get(&2).unwrap()));
-        assert!(node_4_neighbors.contains(tree.nodes_map.get(&5).unwrap()));
-        assert!(node_5_neighbors.contains(tree.nodes_map.get(&4).unwrap()));
+        // Validate that the neighbors have expected values and distances
+        let node_2_neighbors = tree.get_node_neighbors(&2).unwrap();
+        let node_4_neighbors = tree.get_node_neighbors(&4).unwrap();
+        let node_5_neighbors = tree.get_node_neighbors(&5).unwrap();
+
+        assert!(node_2_neighbors.contains_key(&4));
+        assert!(approx_eq!(f64, *node_2_neighbors.get(&4).unwrap(), 2.0));
+
+        assert!(node_4_neighbors.contains_key(&2));
+        assert!(node_4_neighbors.contains_key(&5));
+        assert!(approx_eq!(f64, *node_4_neighbors.get(&2).unwrap(), 2.0));
+        assert!(approx_eq!(f64, *node_4_neighbors.get(&5).unwrap(), 1.0));
+
+        assert!(node_5_neighbors.contains_key(&4));
+        assert!(approx_eq!(f64, *node_5_neighbors.get(&4).unwrap(), 1.0));
     }
 }

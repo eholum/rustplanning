@@ -102,10 +102,7 @@ where
             None => continue,
         };
 
-        // Otherwise it's valid so add it to the tree
-        if let Ok(_) = tree.add_child(&nearest, new_point) {
-            // We're good
-        } else {
+        if tree.add_child(&nearest, new_point).is_err() {
             // Then the child wasn't added for some reason so just try again
             continue;
         }

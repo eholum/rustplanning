@@ -155,7 +155,10 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
             return Err("The child is already in the tree".to_string());
         }
 
-        let parent_idx = *self.nodes_map.get(parent).ok_or("The parent was not found in the tree")?;
+        let parent_idx = *self
+            .nodes_map
+            .get(parent)
+            .ok_or("The parent was not found in the tree")?;
 
         // The cost is the parent's cost + the distance to the parent
         let cost = self.nodes[parent_idx].cost + child.distance(parent);
@@ -179,7 +182,10 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
     /// If the child is the root of the tree.
     pub fn set_parent(&mut self, parent: &T, child: &T) -> Result<(), String> {
         // Validate that this is a reasonable request
-        let parent_idx = *self.nodes_map.get(parent).ok_or("Parent not found in tree")?;
+        let parent_idx = *self
+            .nodes_map
+            .get(parent)
+            .ok_or("Parent not found in tree")?;
         let child_idx = *self.nodes_map.get(child).ok_or("Child not found in tree")?;
         if child_idx == 0 {
             return Err("Cannot reparent the root of the tree!".to_string());

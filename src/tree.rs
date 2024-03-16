@@ -36,6 +36,9 @@ struct Node<T> {
     // Location of the nodes parent, if available
     parent: Option<usize>,
 
+    // The cost to reach this node.
+    cost: f64,
+
     // Maintains a list of pointers to the children's location in the parent's vector.
     // Using a vector to maintain order for tree traversals.
     children: Vec<usize>,
@@ -45,10 +48,11 @@ struct Node<T> {
 }
 
 impl<T> Node<T> {
-    fn new(value: T, parent: Option<usize>) -> Self {
+    fn new(value: T, parent: Option<usize>, cost: f64) -> Self {
         Node {
             value: value,
             parent: parent,
+            cost: cost,
             children: Vec::new(),
             neighbors: HashMap::new(),
         }
@@ -130,7 +134,7 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         let mut nodes_map = HashMap::new();
 
         // Construct root node and add it to storage
-        let root_node = Node::new(val.clone(), None);
+        let root_node = Node::new(val.clone(), None, 0.0);
         nodes.push(root_node);
         nodes_map.insert(val, 0);
 
@@ -150,9 +154,13 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         }
 
         if let Some(&parent_idx) = self.nodes_map.get(&parent) {
+            // The cost is the parent's cost + the distance to the parent
+            let cost = self.nodes[parent_idx].cost + child.distance(parent);
+            let child_node = Node::new(child.clone(), Some(parent_idx), cost);
+
             // Append the child node to the nodes vector and note the location in the map.
             let child_idx = self.nodes.len();
-            self.nodes.push(Node::new(child.clone(), Some(parent_idx)));
+            self.nodes.push(child_node);
             self.nodes_map.insert(child, child_idx);
             self.nodes[parent_idx].children.push(child_idx);
         } else {
@@ -316,6 +324,11 @@ mod tests {
         assert!(tree.add_child(&2, 4).is_ok());
         assert_eq!(tree.size(), 4);
 
+        // Validate costs
+        assert!(approx_eq!(f64, tree.get_node(&2).unwrap().cost, 1.0));
+        assert!(approx_eq!(f64, tree.get_node(&3).unwrap().cost, 2.0));
+        assert!(approx_eq!(f64, tree.get_node(&4).unwrap().cost, 3.0));
+
         // Add an existing child and everything is not ok
         assert!(tree.add_child(&1, 2).is_err());
 
@@ -395,12 +408,14 @@ mod tests {
 
         // 5 is the closest to 4.
         let nearest = *tree.nearest_neighbors(&4, 2.0).unwrap();
-        assert_eq!(nearest, 5);
-
-        // All neighbors should be updated
         let node_2 = tree.get_node(&2).unwrap();
         let node_4 = tree.get_node(&4).unwrap();
         let node_5 = tree.get_node(&5).unwrap();
+
+        // Verify the cost and the nearest node
+        assert_eq!(nearest, 5);
+
+        // All neighbors should be updated
 
         assert_eq!(node_2.neighbors.len(), 1);
         assert_eq!(node_4.neighbors.len(), 2);

@@ -44,9 +44,6 @@ struct Node<T> {
     // Maintains a set of pointers to the children's location in the tree's node list.
     // Using a linked hash set to maintain order for tree traversals.
     children: LinkedHashSet<usize>,
-
-    // Set of nearest neighbors and their distances.
-    neighbors: HashMap<usize, f64>,
 }
 
 impl<T> Node<T> {
@@ -56,7 +53,6 @@ impl<T> Node<T> {
             parent: parent,
             cost: cost,
             children: LinkedHashSet::new(),
-            neighbors: HashMap::new(),
         }
     }
 }
@@ -107,14 +103,15 @@ where
     }
 }
 
-/// Basic tree for use in search algorithms.
+/// Tree for use in RRT based-search algorithms.
 ///
 /// Provides functions for creating, growing, finding the nearest neighbors to `T`,
-/// and rewiring the based on cost are provided.
+/// and rewiring are provided.
 /// Node values must be unique.
 ///
 /// TODO: Make this a KD Tree?
 /// TODO: Is a hashmap dumb?
+/// TODO: Is there a more efficient way to manage ownership of T?
 #[derive(Debug)]
 pub struct Tree<T>
 where
@@ -225,15 +222,15 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
             .value
     }
 
-    /// Finds all nodes that are within the specified radius and sets the
-    /// neighbors list accordingly. The node must already be in the tree.
+    /// Finds all nodes that are within the specified radius and returns both the closest,
+    /// and a Vector of all neighbors and their distances.
     ///
     /// Returns the closet element to the specified value.
     ///
     /// # Errors
     ///
     /// If the provided `T` value is not in the tree.
-    pub fn nearest_neighbors(&mut self, val: &T, radius: f64) -> Result<&T, String> {
+    pub fn nearest_neighbors(&mut self, val: &T, radius: f64) -> Result<(&T, HashMap<T, f64>), String> {
         let node_idx: usize = *self
             .nodes_map
             .get(val)
@@ -242,7 +239,7 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         // First iterate over all nodes to identify all neighbors
         let mut min_distance = std::f64::MAX;
         let mut nearest_idx = node_idx;
-        let mut neighbors = Vec::new();
+        let mut neighbors = HashMap::new();
         for (i, check) in self.nodes.iter().enumerate() {
             // Skip the current node
             if i == node_idx {
@@ -252,7 +249,7 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
             // Compute and check distances
             let distance = val.distance(&check.value);
             if distance <= radius {
-                neighbors.push((i, distance));
+                neighbors.insert(self.nodes[i].value.clone(), distance);
             }
             if distance < min_distance {
                 min_distance = distance;
@@ -260,13 +257,7 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
             }
         }
 
-        // Then update neighbors sets and identify the nearest.
-        for (i, distance) in neighbors {
-            self.nodes[node_idx].neighbors.insert(i, distance);
-            self.nodes[i].neighbors.insert(node_idx, distance);
-        }
-
-        Ok(&self.nodes[nearest_idx].value)
+        Ok((&self.nodes[nearest_idx].value, neighbors))
     }
 
     /// Returns a [DepthFirstIterator] for the tree
@@ -303,27 +294,11 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
     /// Returns the node with the specified value
     ///
     /// Returns None if the specified value is not in the tree.
+    #[allow(dead_code)]
     fn get_node(&self, val: &T) -> Option<&Node<T>> {
         self.nodes_map
             .get(val)
             .and_then(|&index| self.nodes.get(index))
-    }
-
-    /// Returns a list of neighbors by value, along with their distances.
-    ///
-    /// Returns None if the specified value is not in the tree.
-    /// Only used for testing.
-    #[allow(dead_code)]
-    fn get_node_neighbors(&self, val: &T) -> Option<HashMap<T, f64>> {
-        if let Some(node) = self.get_node(val) {
-            let mut neighbors = HashMap::new();
-            for (idx, distance) in node.neighbors.iter() {
-                neighbors.insert(self.nodes[*idx].value.clone(), *distance);
-            }
-            return Some(neighbors);
-        }
-
-        None
     }
 }
 
@@ -463,35 +438,14 @@ mod tests {
         assert!(tree.add_child(&2, 5).is_ok());
         assert!(tree.add_child(&4, 7).is_ok());
 
-        // 5 is the closest to 4.
-        let nearest = *tree.nearest_neighbors(&4, 2.0).unwrap();
-        let node_2 = tree.get_node(&2).unwrap();
-        let node_4 = tree.get_node(&4).unwrap();
-        let node_5 = tree.get_node(&5).unwrap();
-
         // Verify the cost and the nearest node
-        assert_eq!(nearest, 5);
-
-        // All neighbors should be updated
-
-        assert_eq!(node_2.neighbors.len(), 1);
-        assert_eq!(node_4.neighbors.len(), 2);
-        assert_eq!(node_5.neighbors.len(), 1);
-
-        // Validate that the neighbors have expected values and distances
-        let node_2_neighbors = tree.get_node_neighbors(&2).unwrap();
-        let node_4_neighbors = tree.get_node_neighbors(&4).unwrap();
-        let node_5_neighbors = tree.get_node_neighbors(&5).unwrap();
-
-        assert!(node_2_neighbors.contains_key(&4));
-        assert!(approx_eq!(f64, *node_2_neighbors.get(&4).unwrap(), 2.0));
-
-        assert!(node_4_neighbors.contains_key(&2));
-        assert!(node_4_neighbors.contains_key(&5));
-        assert!(approx_eq!(f64, *node_4_neighbors.get(&2).unwrap(), 2.0));
-        assert!(approx_eq!(f64, *node_4_neighbors.get(&5).unwrap(), 1.0));
-
-        assert!(node_5_neighbors.contains_key(&4));
-        assert!(approx_eq!(f64, *node_5_neighbors.get(&4).unwrap(), 1.0));
+        // 5 is the closest to 4... duh.
+        let (nearest, neighbors) = tree.nearest_neighbors(&4, 2.0).unwrap();
+        assert_eq!(nearest, &5);
+        assert_eq!(neighbors.len(), 2);
+        assert!(neighbors.contains_key(&2));
+        assert!(neighbors.contains_key(&5));
+        assert!(approx_eq!(f64, *neighbors.get(&2).unwrap(), 2.0));
+        assert!(approx_eq!(f64, *neighbors.get(&5).unwrap(), 1.0));
     }
 }

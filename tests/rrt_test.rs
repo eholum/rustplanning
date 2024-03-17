@@ -90,16 +90,12 @@ fn test_rrt() {
 
     // All points except for ball around 4,4 of radius 1 are valid
     let obstacle = Point2D::new(4.0, 4.0);
-    let is_valid = |p: &Point2D| {
-        p.distance(&obstacle) > 1.0
-    };
+    let is_valid = |p: &Point2D| p.distance(&obstacle) > 1.0;
 
     // Are we within 0.5 of the goal?
     let success = |p: &Point2D| p.distance(&goal) < success_distance;
 
-    let result = rrt(
-        &start, sample, extend, is_valid, success, 10000,
-    );
+    let result = rrt(&start, sample, extend, is_valid, success, 10000);
 
     assert!(result.is_ok(), "Expected Ok result, got Err");
 
@@ -109,7 +105,10 @@ fn test_rrt() {
 
     // Verify it ends at the goal
     let end = path.last().unwrap();
-    assert!(end.distance(&goal) < success_distance, "Path should end near the goal");
+    assert!(
+        end.distance(&goal) < success_distance,
+        "Path should end near the goal"
+    );
 }
 
 #[test]
@@ -124,16 +123,12 @@ fn test_rrtstar() {
 
     // All points except for ball around 4,4 of radius 1 are valid
     let obstacle = Point2D::new(4.0, 4.0);
-    let is_valid = |p: &Point2D| {
-        p.distance(&obstacle) > 1.0
-    };
+    let is_valid = |p: &Point2D| p.distance(&obstacle) > 1.0;
 
     // Are we within 0.5 of the goal?
     let success = |p: &Point2D| p.distance(&goal) < success_distance;
 
-    let result = rrtstar(
-        &start, sample, extend, is_valid, success, 0.3, 10000,
-    );
+    let result = rrtstar(&start, sample, extend, is_valid, success, 0.3, 10000);
 
     assert!(result.is_ok(), "Expected Ok result, got Err");
 
@@ -143,5 +138,8 @@ fn test_rrtstar() {
 
     // Verify it ends at the goal
     let end = path.last().unwrap();
-    assert!(end.distance(&goal) < success_distance, "Path should end near the goal");
+    assert!(
+        end.distance(&goal) < success_distance,
+        "Path should end near the goal"
+    );
 }

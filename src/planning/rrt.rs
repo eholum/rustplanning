@@ -119,3 +119,69 @@ where
     // Otherwise we've hit max_iter with finding success
     Err("Failed to find a path".to_string())
 }
+
+/// Basic implementation for RRTStar.
+/// Method signature is nearly identical to rrt, though includes a radius for
+/// rewiring neighbors based on distances.
+///
+/// WIP!
+///
+pub fn rrtstar<T, FS, FE, FV, FD>(
+    start: &T,
+    mut sample: FS,
+    mut extend: FE,
+    mut is_valid: FV,
+    mut success: FD,
+    sample_radius: f64,
+    max_iterations: usize,
+) -> Result<Vec<T>, String>
+where
+    T: Eq + Copy + Hash + Distance,
+    FS: FnMut() -> T,
+    FE: FnMut(&T, &T) -> T,
+    FV: FnMut(&T) -> bool,
+    FD: FnMut(&T) -> bool,
+{
+    let mut tree = Tree::new(start.clone());
+
+    for _ in 0..max_iterations {
+        // Sample the grab the nearest point, and extend in that direction
+        let (new_point, nearest) = match extend_tree(&tree, &mut sample, &mut extend, &mut is_valid)
+        {
+            Some((new_point, nearest)) => (new_point, nearest),
+            None => continue,
+        };
+
+        // Compute the cost to reach the new node from the nearest node
+        let new_cost = new_point.distance(&nearest) + tree.cost(&nearest).unwrap();
+
+        // Get a list of all nodes that are within the sample radius
+        let neighbors_maybe = tree.nearest_neighbors(&new_point, sample_radius);
+        if neighbors_maybe.is_err() {
+            continue;
+        }
+        let (_, neighbors) = neighbors_maybe.unwrap();
+
+        // Rewire the tree
+        for (neighbor, cost) in neighbors.iter() {
+            if new_cost + neighbor.distance(&new_point) < *cost {
+                tree.set_parent(&new_point, neighbor)?;
+            }
+        }
+
+        if tree.add_child(&nearest, new_point).is_err() {
+            continue;
+        }
+
+        // Are we there yet? If so return the path.
+        if success(&new_point) {
+            match tree.path(&new_point) {
+                Ok(path) => return Ok(path),
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    // Otherwise we've hit max_iter with finding success
+    Err("Failed to find a path".to_string())
+}

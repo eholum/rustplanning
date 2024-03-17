@@ -203,9 +203,23 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         Ok(())
     }
 
-    // Return the size of the tree
+    /// Return the size of the tree
     pub fn size(&self) -> usize {
         self.nodes.len()
+    }
+
+    /// Return the cost to reach a particular node
+    ///
+    /// # Errors
+    ///
+    /// If the value is not in the tree.
+    pub fn cost(&self, val: &T) -> Result<f64, String> {
+        let node_idx: usize = *self
+            .nodes_map
+            .get(val)
+            .ok_or("Specified value is not present in the tree".to_string())?;
+
+        Ok(self.nodes[node_idx].cost)
     }
 
     /// Returns the closest element to the specified value

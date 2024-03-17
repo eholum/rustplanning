@@ -236,42 +236,20 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
             .value
     }
 
-    /// Finds all nodes that are within the specified radius and returns both the closest,
-    /// and a Vector of all neighbors and their distances.
-    ///
-    /// Returns the closet element to the specified value.
-    ///
-    /// # Errors
-    ///
-    /// If the provided `T` value is not in the tree.
-    pub fn nearest_neighbors(&mut self, val: &T, radius: f64) -> Result<(&T, HashMap<T, f64>), String> {
-        let node_idx: usize = *self
-            .nodes_map
-            .get(val)
-            .ok_or("Specified value is not present in the tree".to_string())?;
-
+    /// Finds all nodes that are within the specified radius and returns a map of
+    /// all closest elements and their values.
+    pub fn nearest_neighbors(&mut self, val: &T, radius: f64) -> HashMap<T, f64> {
         // First iterate over all nodes to identify all neighbors
-        let mut min_distance = std::f64::MAX;
-        let mut nearest_idx = node_idx;
         let mut neighbors = HashMap::new();
         for (i, check) in self.nodes.iter().enumerate() {
-            // Skip the current node
-            if i == node_idx {
-                continue;
-            }
-
             // Compute and check distances
             let distance = val.distance(&check.value);
             if distance <= radius {
                 neighbors.insert(self.nodes[i].value.clone(), distance);
             }
-            if distance < min_distance {
-                min_distance = distance;
-                nearest_idx = i;
-            }
         }
 
-        Ok((&self.nodes[nearest_idx].value, neighbors))
+        neighbors
     }
 
     /// Returns a [DepthFirstIterator] for the tree
@@ -454,9 +432,8 @@ mod tests {
 
         // Verify the cost and the nearest node
         // 5 is the closest to 4... duh.
-        let (nearest, neighbors) = tree.nearest_neighbors(&4, 2.0).unwrap();
-        assert_eq!(nearest, &5);
-        assert_eq!(neighbors.len(), 2);
+        let neighbors = tree.nearest_neighbors(&4, 2.0);
+        assert_eq!(neighbors.len(), 3);
         assert!(neighbors.contains_key(&2));
         assert!(neighbors.contains_key(&5));
         assert!(approx_eq!(f64, *neighbors.get(&2).unwrap(), 2.0));

@@ -22,6 +22,7 @@
 
 use crate::tree::Distance;
 use crate::tree::Tree;
+use std::fmt::Display;
 use std::hash::Hash;
 
 /// Attempts to randomly extend the tree in an arbitrary direction.
@@ -121,11 +122,11 @@ where
 }
 
 /// Basic implementation for RRTStar.
-/// Method signature is nearly identical to rrt, though includes a radius for
-/// rewiring neighbors based on distances.
 ///
-/// WIP!
+/// Method signature is nearly identical to [`rrt`], though includes a radius for
+/// rewiring neighbors of sampled nodes.
 ///
+/// Refer to the integration tests for an example.
 pub fn rrtstar<T, FS, FE, FV, FD>(
     start: &T,
     mut sample: FS,
@@ -136,7 +137,7 @@ pub fn rrtstar<T, FS, FE, FV, FD>(
     max_iterations: usize,
 ) -> Result<Vec<T>, String>
 where
-    T: Eq + Copy + Hash + Distance,
+    T: Eq + Copy + Hash + Distance + Display,
     FS: FnMut() -> T,
     FE: FnMut(&T, &T) -> T,
     FV: FnMut(&T) -> bool,
@@ -156,11 +157,7 @@ where
         let new_cost = new_point.distance(&nearest) + tree.cost(&nearest).unwrap();
 
         // Get a list of all nodes that are within the sample radius
-        let neighbors_maybe = tree.nearest_neighbors(&new_point, sample_radius);
-        if neighbors_maybe.is_err() {
-            continue;
-        }
-        let (_, neighbors) = neighbors_maybe.unwrap();
+        let neighbors = tree.nearest_neighbors(&new_point, sample_radius);
 
         // Rewire the tree
         for (neighbor, cost) in neighbors.iter() {

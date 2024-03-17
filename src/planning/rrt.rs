@@ -22,7 +22,6 @@
 
 use crate::tree::Distance;
 use crate::tree::Tree;
-use std::fmt::Display;
 use std::hash::Hash;
 
 /// Attempts to randomly extend the tree in an arbitrary direction.
@@ -85,7 +84,7 @@ pub fn rrt<T, FS, FE, FV, FD>(
     mut extend: FE,
     mut is_valid: FV,
     mut success: FD,
-    max_iterations: usize,
+    max_iterations: u64,
 ) -> Result<Vec<T>, String>
 where
     T: Eq + Copy + Hash + Distance,
@@ -134,10 +133,10 @@ pub fn rrtstar<T, FS, FE, FV, FD>(
     mut is_valid: FV,
     mut success: FD,
     sample_radius: f64,
-    max_iterations: usize,
+    max_iterations: u64,
 ) -> Result<Vec<T>, String>
 where
-    T: Eq + Copy + Hash + Distance + Display,
+    T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
     FE: FnMut(&T, &T) -> T,
     FV: FnMut(&T) -> bool,

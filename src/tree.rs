@@ -25,6 +25,8 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
+use linked_hash_set::LinkedHashSet;
+
 /// Basic node element for the tree.
 ///
 /// Must be used with [Tree] since children are referenced by index in the [Tree]'s node vector.
@@ -36,17 +38,21 @@ struct Node<T> {
     // Location of the nodes parent, if available
     parent: Option<usize>,
 
-    // Maintains a list of pointers to the children's location in the parent's vector.
-    // Using a vector to maintain order for tree traversals.
-    children: Vec<usize>,
+    // The cost to reach this node.
+    cost: f64,
+
+    // Maintains a set of pointers to the children's location in the tree's node list.
+    // Using a linked hash set to maintain order for tree traversals.
+    children: LinkedHashSet<usize>,
 }
 
 impl<T> Node<T> {
-    fn new(value: T, parent: Option<usize>) -> Self {
+    fn new(value: T, parent: Option<usize>, cost: f64) -> Self {
         Node {
             value: value,
             parent: parent,
-            children: Vec::new(),
+            cost: cost,
+            children: LinkedHashSet::new(),
         }
     }
 }
@@ -97,14 +103,15 @@ where
     }
 }
 
-/// Basic tree for use in search algorithms.
+/// Tree for use in RRT based-search algorithms.
 ///
 /// Provides functions for creating, growing, finding the nearest neighbors to `T`,
-/// and rewiring the based on cost are provided.
+/// and rewiring are provided.
 /// Node values must be unique.
 ///
 /// TODO: Make this a KD Tree?
 /// TODO: Is a hashmap dumb?
+/// TODO: Is there a more efficient way to manage ownership of T?
 #[derive(Debug)]
 pub struct Tree<T>
 where
@@ -126,14 +133,11 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         let mut nodes_map = HashMap::new();
 
         // Construct root node and add it to storage
-        let root_node = Node::new(val.clone(), None);
+        let root_node = Node::new(val.clone(), None, 0.0);
         nodes.push(root_node);
         nodes_map.insert(val, 0);
 
-        Tree {
-            nodes,
-            nodes_map,
-        }
+        Tree { nodes, nodes_map }
     }
 
     /// Adds the value to the specified node's children
@@ -148,22 +152,74 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
             return Err("The child is already in the tree".to_string());
         }
 
-        if let Some(&parent_idx) = self.nodes_map.get(&parent) {
-            // Append the child node to the nodes vector and note the location in the map.
-            let child_idx = self.nodes.len();
-            self.nodes.push(Node::new(child.clone(), Some(parent_idx)));
-            self.nodes_map.insert(child, child_idx);
-            self.nodes[parent_idx].children.push(child_idx);
-        } else {
-            return Err("The parent cannot be found in the tree".to_string());
-        }
+        let parent_idx = *self
+            .nodes_map
+            .get(parent)
+            .ok_or("The parent was not found in the tree")?;
+
+        // The cost is the parent's cost + the distance to the parent
+        let cost = self.nodes[parent_idx].cost + child.distance(parent);
+        let child_node = Node::new(child.clone(), Some(parent_idx), cost);
+
+        // Append the child node to the nodes vector and note the location in the map.
+        let child_idx = self.nodes.len();
+        self.nodes.push(child_node);
+        self.nodes_map.insert(child, child_idx);
+        self.nodes[parent_idx].children.insert(child_idx);
 
         Ok(())
     }
 
-    // Return the size of the tree
+    /// Moves the specified child to be a direct descendant of the specified parent.
+    /// Updates cost data accordingly.
+    ///
+    /// # Errors
+    ///
+    /// If either the child or the parent are not in the tree.
+    /// If the child is the root of the tree.
+    pub fn set_parent(&mut self, parent: &T, child: &T) -> Result<(), String> {
+        // Validate that this is a reasonable request
+        let parent_idx = *self
+            .nodes_map
+            .get(parent)
+            .ok_or("Parent not found in tree")?;
+        let child_idx = *self.nodes_map.get(child).ok_or("Child not found in tree")?;
+        if child_idx == 0 {
+            return Err("Cannot reparent the root of the tree!".to_string());
+        }
+
+        // Remove the child from its existing parent
+        let existing_parent = self.nodes[child_idx].parent.unwrap();
+        self.nodes[existing_parent].children.remove(&child_idx);
+
+        // Update relationships
+        self.nodes[child_idx].parent = Some(parent_idx);
+        self.nodes[parent_idx].children.insert(child_idx);
+
+        // Update cost
+        let cost = self.nodes[parent_idx].cost + child.distance(parent);
+        self.nodes[child_idx].cost = cost;
+
+        Ok(())
+    }
+
+    /// Return the size of the tree
     pub fn size(&self) -> usize {
         self.nodes.len()
+    }
+
+    /// Return the cost to reach a particular node
+    ///
+    /// # Errors
+    ///
+    /// If the value is not in the tree.
+    pub fn cost(&self, val: &T) -> Result<f64, String> {
+        let node_idx: usize = *self
+            .nodes_map
+            .get(val)
+            .ok_or("Specified value is not present in the tree".to_string())?;
+
+        Ok(self.nodes[node_idx].cost)
     }
 
     /// Returns the closest element to the specified value
@@ -178,6 +234,22 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
             })
             .unwrap()
             .value
+    }
+
+    /// Finds all nodes that are within the specified radius and returns a map of
+    /// all closest elements and their values.
+    pub fn nearest_neighbors(&mut self, val: &T, radius: f64) -> HashMap<T, f64> {
+        // First iterate over all nodes to identify all neighbors
+        let mut neighbors = HashMap::new();
+        for (i, check) in self.nodes.iter().enumerate() {
+            // Compute and check distances
+            let distance = val.distance(&check.value);
+            if distance <= radius {
+                neighbors.insert(self.nodes[i].value.clone(), distance);
+            }
+        }
+
+        neighbors
     }
 
     /// Returns a [DepthFirstIterator] for the tree
@@ -210,6 +282,16 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         path.reverse();
         Ok(path)
     }
+
+    /// Returns the node with the specified value
+    ///
+    /// Returns None if the specified value is not in the tree.
+    #[allow(dead_code)]
+    fn get_node(&self, val: &T) -> Option<&Node<T>> {
+        self.nodes_map
+            .get(val)
+            .and_then(|&index| self.nodes.get(index))
+    }
 }
 
 //
@@ -225,6 +307,8 @@ impl Distance for i32 {
 
 #[cfg(test)]
 mod tests {
+    use float_cmp::approx_eq;
+
     use super::*;
 
     #[test]
@@ -243,11 +327,37 @@ mod tests {
         assert!(tree.add_child(&2, 4).is_ok());
         assert_eq!(tree.size(), 4);
 
+        // Validate costs
+        assert!(approx_eq!(f64, tree.get_node(&2).unwrap().cost, 1.0));
+        assert!(approx_eq!(f64, tree.get_node(&3).unwrap().cost, 2.0));
+        assert!(approx_eq!(f64, tree.get_node(&4).unwrap().cost, 3.0));
+
         // Add an existing child and everything is not ok
         assert!(tree.add_child(&1, 2).is_err());
 
         // Add to a nonexistent parent and everything is not ok
         assert!(tree.add_child(&3, 2).is_err());
+    }
+
+    #[test]
+    fn test_tree_reparenting() {
+        let mut tree: Tree<i32> = Tree::new(1);
+        assert!(tree.add_child(&1, 2).is_ok());
+        assert!(tree.add_child(&2, 0).is_ok());
+        assert!(approx_eq!(f64, tree.get_node(&0).unwrap().cost, 3.0));
+        assert_eq!(tree.get_node(&1).unwrap().children.len(), 1);
+        assert_eq!(tree.get_node(&2).unwrap().children.len(), 1);
+
+        // Validate failures
+        assert!(tree.set_parent(&2, &1).is_err());
+        assert!(tree.set_parent(&1, &4).is_err());
+        assert!(tree.set_parent(&3, &2).is_err());
+
+        // Reparent and validate the tree
+        assert!(tree.set_parent(&1, &0).is_ok());
+        assert!(approx_eq!(f64, tree.get_node(&0).unwrap().cost, 1.0));
+        assert_eq!(tree.get_node(&1).unwrap().children.len(), 2);
+        assert_eq!(tree.get_node(&2).unwrap().children.len(), 0);
     }
 
     #[test]
@@ -309,5 +419,24 @@ mod tests {
 
         // Invalid node
         assert!(tree.path(&8).is_err());
+    }
+
+    #[test]
+    fn test_tree_nearest_neighbors() {
+        let mut tree: Tree<i32> = Tree::new(1);
+
+        assert!(tree.add_child(&1, 2).is_ok());
+        assert!(tree.add_child(&1, 4).is_ok());
+        assert!(tree.add_child(&2, 5).is_ok());
+        assert!(tree.add_child(&4, 7).is_ok());
+
+        // Verify the cost and the nearest node
+        // 5 is the closest to 4... duh.
+        let neighbors = tree.nearest_neighbors(&4, 2.0);
+        assert_eq!(neighbors.len(), 3);
+        assert!(neighbors.contains_key(&2));
+        assert!(neighbors.contains_key(&5));
+        assert!(approx_eq!(f64, *neighbors.get(&2).unwrap(), 2.0));
+        assert!(approx_eq!(f64, *neighbors.get(&5).unwrap(), 1.0));
     }
 }

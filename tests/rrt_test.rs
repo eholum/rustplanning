@@ -22,7 +22,7 @@
 
 use ordered_float::OrderedFloat;
 use rand::Rng;
-use rustplanning::planning::rrt::rrt;
+use rustplanning::planning::rrt::{rrt, rrtstar};
 use rustplanning::tree::Distance;
 use std::fmt;
 
@@ -78,8 +78,7 @@ fn extend(start: &Point2D, end: &Point2D) -> Point2D {
     )
 }
 
-#[test]
-fn test_rrt() {
+fn run_rrt_test(use_rrtstar: bool) {
     let start = Point2D::new(0.0, 0.0);
     let goal = Point2D::new(9.0, 9.0);
 
@@ -88,27 +87,42 @@ fn test_rrt() {
     // succeeds.
     let success_distance = 0.5;
 
-    // All points are valid for now
-    let is_valid = |_: &Point2D| true;
+    // All points except for ball around 4,4 of radius 1 are valid
+    let obstacle = Point2D::new(4.0, 4.0);
+    let is_valid = |p: &Point2D| p.distance(&obstacle) > 1.0;
 
     // Are we within 0.5 of the goal?
     let success = |p: &Point2D| p.distance(&goal) < success_distance;
 
-    let result = rrt(
-        &start, sample, extend, is_valid, success, 10000,
-    );
+    let result;
+    if use_rrtstar {
+        result = rrtstar(&start, sample, extend, is_valid, success, 0.3, 10000);
+    }
+    else {
+        result = rrt(&start, sample, extend, is_valid, success, 10000);
+    }
 
     assert!(result.is_ok(), "Expected Ok result, got Err");
 
-    let path = result.unwrap();
+    let (path, _) = result.unwrap();
     assert!(!path.is_empty(), "Path should not be empty");
     assert_eq!(path[0], start, "Path should start at the start point");
 
     // Verify it ends at the goal
     let end = path.last().unwrap();
-    assert!(end.distance(&goal) < success_distance, "Path should end near the goal");
-    print!("Path:\n");
-    for p in path {
-        print!("  {p}\n");
-    }
+    assert!(
+        end.distance(&goal) < success_distance,
+        "Path should end near the goal"
+    );
+
+}
+
+#[test]
+fn test_rrt() {
+    run_rrt_test(false);
+}
+
+#[test]
+fn test_rrtstar() {
+    run_rrt_test(true);
 }

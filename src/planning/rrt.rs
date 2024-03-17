@@ -68,9 +68,9 @@ where
 ///
 /// # Returns
 /// Returns a `Result` containing either:
-/// - `Ok(Vec<T>)`: A vector of points of type `T` representing the path from the start to a point
-///                 satisfying the `success` condition, if such a path is found within the given number
-///                 of iterations.
+/// - `Ok((Vec<T>, Tree<T>))`: A tuple of a vector of points of type `T` representing the path from the
+///                 start to a poin satisfying the `success` condition, if such a path is found within
+///                 the given number of iterations. Along with the Tree itself.
 /// - `Err(String)`: An error message in a string if the algorithm fails to find a satisfactory path
 ///                  within the `max_iterations`.
 ///
@@ -84,8 +84,8 @@ pub fn rrt<T, FS, FE, FV, FD>(
     mut extend: FE,
     mut is_valid: FV,
     mut success: FD,
-    max_iterations: usize,
-) -> Result<Vec<T>, String>
+    max_iterations: u64,
+) -> Result<(Vec<T>, Tree<T>), String>
 where
     T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
@@ -102,10 +102,7 @@ where
             None => continue,
         };
 
-        // Otherwise it's valid so add it to the tree
-        if let Ok(_) = tree.add_child(&nearest, new_point) {
-            // We're good
-        } else {
+        if tree.add_child(&nearest, new_point).is_err() {
             // Then the child wasn't added for some reason so just try again
             continue;
         }
@@ -113,7 +110,68 @@ where
         // Are we there yet? If so return the path.
         if success(&new_point) {
             match tree.path(&new_point) {
-                Ok(path) => return Ok(path),
+                Ok(path) => return Ok((path, tree)),
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    // Otherwise we've hit max_iter with finding success
+    Err("Failed to find a path".to_string())
+}
+
+/// Basic implementation for RRTStar.
+///
+/// Method signature is nearly identical to [`rrt`], though includes a radius for
+/// rewiring neighbors of sampled nodes.
+///
+/// Refer to the integration tests for an example.
+pub fn rrtstar<T, FS, FE, FV, FD>(
+    start: &T,
+    mut sample: FS,
+    mut extend: FE,
+    mut is_valid: FV,
+    mut success: FD,
+    sample_radius: f64,
+    max_iterations: u64,
+) -> Result<(Vec<T>, Tree<T>), String>
+where
+    T: Eq + Copy + Hash + Distance,
+    FS: FnMut() -> T,
+    FE: FnMut(&T, &T) -> T,
+    FV: FnMut(&T) -> bool,
+    FD: FnMut(&T) -> bool,
+{
+    let mut tree = Tree::new(start.clone());
+
+    for _ in 0..max_iterations {
+        // Sample the grab the nearest point, and extend in that direction
+        let (new_point, nearest) = match extend_tree(&tree, &mut sample, &mut extend, &mut is_valid)
+        {
+            Some((new_point, nearest)) => (new_point, nearest),
+            None => continue,
+        };
+
+        // Compute the cost to reach the new node from the nearest node
+        let new_cost = new_point.distance(&nearest) + tree.cost(&nearest).unwrap();
+
+        // Get a list of all nodes that are within the sample radius
+        let neighbors = tree.nearest_neighbors(&new_point, sample_radius);
+
+        // Rewire the tree
+        for (neighbor, cost) in neighbors.iter() {
+            if new_cost + neighbor.distance(&new_point) < *cost {
+                tree.set_parent(&new_point, neighbor)?;
+            }
+        }
+
+        // Abort if something goes wrong...
+        tree.add_child(&nearest, new_point).unwrap();
+
+        // Are we there yet? If so return the path.
+        if success(&new_point) {
+            match tree.path(&new_point) {
+                Ok(path) => return Ok((path, tree)),
                 Err(e) => return Err(e),
             }
         }

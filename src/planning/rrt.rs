@@ -68,9 +68,9 @@ where
 ///
 /// # Returns
 /// Returns a `Result` containing either:
-/// - `Ok(Vec<T>)`: A vector of points of type `T` representing the path from the start to a point
-///                 satisfying the `success` condition, if such a path is found within the given number
-///                 of iterations.
+/// - `Ok((Vec<T>, Tree<T>))`: A tuple of a vector of points of type `T` representing the path from the
+///                 start to a poin satisfying the `success` condition, if such a path is found within
+///                 the given number of iterations. Along with the Tree itself.
 /// - `Err(String)`: An error message in a string if the algorithm fails to find a satisfactory path
 ///                  within the `max_iterations`.
 ///
@@ -85,7 +85,7 @@ pub fn rrt<T, FS, FE, FV, FD>(
     mut is_valid: FV,
     mut success: FD,
     max_iterations: u64,
-) -> Result<Vec<T>, String>
+) -> Result<(Vec<T>, Tree<T>), String>
 where
     T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
@@ -110,7 +110,7 @@ where
         // Are we there yet? If so return the path.
         if success(&new_point) {
             match tree.path(&new_point) {
-                Ok(path) => return Ok(path),
+                Ok(path) => return Ok((path, tree)),
                 Err(e) => return Err(e),
             }
         }
@@ -134,7 +134,7 @@ pub fn rrtstar<T, FS, FE, FV, FD>(
     mut success: FD,
     sample_radius: f64,
     max_iterations: u64,
-) -> Result<Vec<T>, String>
+) -> Result<(Vec<T>, Tree<T>), String>
 where
     T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
@@ -165,14 +165,13 @@ where
             }
         }
 
-        if tree.add_child(&nearest, new_point).is_err() {
-            continue;
-        }
+        // Abort if something goes wrong...
+        tree.add_child(&nearest, new_point).unwrap();
 
         // Are we there yet? If so return the path.
         if success(&new_point) {
             match tree.path(&new_point) {
-                Ok(path) => return Ok(path),
+                Ok(path) => return Ok((path, tree)),
                 Err(e) => return Err(e),
             }
         }

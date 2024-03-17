@@ -104,7 +104,7 @@ fn run_rrt_test(use_rrtstar: bool) {
 
     assert!(result.is_ok(), "Expected Ok result, got Err");
 
-    let path = result.unwrap();
+    let (path, _) = result.unwrap();
     assert!(!path.is_empty(), "Path should not be empty");
     assert_eq!(path[0], start, "Path should start at the start point");
 

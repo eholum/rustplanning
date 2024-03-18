@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//! Basic tree structure to store vertices with arbitrary data types.
-//! Types must implement a distance trait to enable determination of nearest neighbors.
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -298,18 +296,18 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
 // Unit tests
 //
 
-// Needed for distancing points on a line
-impl Distance for i32 {
-    fn distance(&self, other: &Self) -> f64 {
-        (self - other).abs().into()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use float_cmp::approx_eq;
 
     use super::*;
+
+    // Needed for distancing points on a line
+    impl Distance for i32 {
+        fn distance(&self, other: &Self) -> f64 {
+            (self - other).abs().into()
+        }
+    }
 
     #[test]
     fn test_tree_children() {

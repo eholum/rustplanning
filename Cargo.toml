@@ -2,6 +2,12 @@
 name = "rustplanning"
 version = "0.1.0"
 edition = "2021"
+authors = ["Erik Holum <eholum@gmail.com>"]
+description = "Common planning algorithms implementations in Rust"
+license = "MIT License"
+keywords = ["search", "motion-planning", "path-finding", "robotics"]
+categories = ["algorithms"]
+repository = "https://github.com/eholum/rustplanning"
 
 [dependencies]
 linked_hash_set = "0.1.4"
@@ -10,3 +16,7 @@ linked_hash_set = "0.1.4"
 ordered-float = "4.2.0"
 rand = "0.8.3"
 float-cmp = "0.9.0"
+
+[lints.clippy]
+module_name_repetitions = { level = "allow", priority = 1 }
+pedantic = { level = "deny", priority = 0 }

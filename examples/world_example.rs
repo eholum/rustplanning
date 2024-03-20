@@ -20,14 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::env;
-
 use geo::{polygon, EuclideanDistance, Point, Polygon};
 use ordered_float::OrderedFloat;
+use plotly::common::{Fill, Line, Mode};
+use plotly::{Layout, Plot, Scatter};
 use rand::Rng;
-
 use rustplanning::planning::rrt::rrtstar;
-use rustplanning::tree::Distance;
+use rustplanning::tree::{Distance, Tree};
+use std::env;
 
 // Define a new wrapper type around `geo::Point<f64>` for robot poses, and
 // to satisfy additional required traits.
@@ -53,7 +53,7 @@ impl RobotPose {
             (end.0.x() - self.0.x()).into_inner(),
             (end.0.y() - self.0.y()).into_inner(),
         );
-        let length = (direction.0.powi(2) + direction.1.powi(2)).sqrt();
+        let length = self.distance(end);
         let norm_direction = (direction.0 / length, direction.1 / length);
         RobotPose::new(
             self.0.x().into_inner() + norm_direction.0 * step_size,
@@ -84,10 +84,10 @@ impl Distance for RobotPose {
 /// Obstacles are represented by Polygons.
 struct World {
     /// x_max and y_max for the world, must be >0.0
-    bounds: (f64, f64),
+    pub bounds: (f64, f64),
 
     // Closed polygons with inaccessible interiors
-    obstacles: Vec<Polygon>,
+    pub obstacles: Vec<Polygon>,
 }
 
 impl World {
@@ -114,6 +114,78 @@ impl World {
     }
 }
 
+/// Visualize a successful path
+fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &Tree<RobotPose>) {
+    let mut plot = Plot::new();
+
+    // Plot obstacles
+    for obstacle in &world.obstacles {
+        let (x, y): (Vec<_>, Vec<_>) = obstacle.exterior().points().map(|p| (p.x(), p.y())).unzip();
+        let trace = Scatter::new(x, y)
+            .fill(Fill::ToSelf)
+            .fill_color("black")
+            .line(Line::new().color("black"))
+            .opacity(1.0);
+        plot.add_trace(trace);
+    }
+
+    // Plot tree
+    for pose in tree.iter_depth_first() {
+        if let Some(parent_pose) = tree.get_parent(pose) {
+            let p = pose.to_point();
+            let parent = parent_pose.to_point();
+            let trace = Scatter::new(vec![p.x(), parent.x()], vec![p.y(), parent.y()])
+                .mode(Mode::Lines)
+                .line(Line::new().color("blue"));
+            plot.add_trace(trace);
+        }
+    }
+
+    // Plot path
+    let path_x: Vec<_> = path
+        .iter()
+        .map(|pose| pose.inner().x().into_inner())
+        .collect();
+    let path_y: Vec<_> = path
+        .iter()
+        .map(|pose| pose.inner().y().into_inner())
+        .collect();
+    let path_trace = Scatter::new(path_x, path_y)
+        .mode(Mode::Lines)
+        .mode(Mode::Markers)
+        .line(Line::new().color("red"));
+    plot.add_trace(path_trace);
+
+    // Plot start and end
+    let start = path.first().unwrap();
+    let end = path.last().unwrap();
+    let start_trace = Scatter::new(
+        vec![start.inner().x().into_inner()],
+        vec![start.inner().y().into_inner()],
+    )
+    .mode(Mode::Markers)
+    .marker(plotly::common::Marker::new().color("green").size(16));
+    let end_trace = Scatter::new(
+        vec![end.inner().x().into_inner()],
+        vec![end.inner().y().into_inner()],
+    )
+    .mode(Mode::Markers)
+    .marker(plotly::common::Marker::new().color("yellow").size(16));
+    plot.add_trace(start_trace);
+    plot.add_trace(end_trace);
+
+    let layout = Layout::new()
+        .title("RRT* Path Finding Result".into())
+        .show_legend(false)
+        .width(750)
+        .height(750)
+        .x_axis(plotly::layout::Axis::new().title("X".into()))
+        .y_axis(plotly::layout::Axis::new().title("Y".into()));
+
+    plot.set_layout(layout);
+    plot.show();
+}
+
 pub fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 5 {
@@ -132,18 +204,19 @@ pub fn main() {
     println!("Start pose: ({}, {})", start_x, start_y);
     println!("End pose: ({}, {})", end_x, end_y);
 
-    // Add a few square obstacles to the world
+    // Add a few rectangular obstacles to the world
     let obstacles = vec![
-        polygon![(x: 20.0, y: 20.0), (x: 30.0, y: 20.0), (x: 30.0, y: 30.0), (x: 20.0, y: 30.0), (x: 20.0, y: 20.0)],
-        polygon![(x: 50.0, y: 50.0), (x: 60.0, y: 50.0), (x: 60.0, y: 60.0), (x: 50.0, y: 60.0), (x: 50.0, y: 50.0)],
-        polygon![(x: 70.0, y: 20.0), (x: 80.0, y: 20.0), (x: 80.0, y: 30.0), (x: 70.0, y: 30.0), (x: 70.0, y: 20.0)],
+        polygon![(x: 10.0, y: 10.0), (x: 30.0, y: 10.0), (x: 30.0, y: 30.0), (x: 10.0, y: 30.0), (x: 10.0, y: 10.0)],
+        polygon![(x: 50.0, y: 50.0), (x: 80.0, y: 50.0), (x: 80.0, y: 80.0), (x: 50.0, y: 80.0), (x: 50.0, y: 50.0)],
+        polygon![(x: 70.0, y: 20.0), (x: 90.0, y: 20.0), (x: 90.0, y: 40.0), (x: 70.0, y: 40.0), (x: 70.0, y: 20.0)],
+        polygon![(x: 35.0, y: 30.0), (x: 45.0, y: 30.0), (x: 45.0, y: 90.0), (x: 35.0, y: 90.0), (x: 35.0, y: 30.0)],
     ];
 
     let world = World::new(100.0, 100.0, obstacles);
 
     // Define closures for rrtstar
     let sample_fn = || world.sample();
-    let extend_fn = |from: &RobotPose, to: &RobotPose| from.extend(to, 1.0);
+    let extend_fn = |from: &RobotPose, to: &RobotPose| from.extend(to, 0.5);
     let is_valid_fn = |pose: &RobotPose| world.is_valid(pose);
     let success_fn = |pose: &RobotPose| pose.distance(&end) <= 3.0;
 
@@ -154,18 +227,12 @@ pub fn main() {
         extend_fn,
         is_valid_fn,
         success_fn,
-        2.5,
+        5.0,
         100000,
     ) {
-        Ok((path, _tree)) => {
-            println!("Path found:");
-            for pose in path {
-                println!(
-                    "({}, {})",
-                    pose.inner().x().into_inner(),
-                    pose.inner().y().into_inner()
-                );
-            }
+        Ok((path, tree)) => {
+            println!("Path found!");
+            visualize_rrt(&world, &path, &tree)
         }
         Err(e) => {
             println!("RRT* failed: {}", e);

@@ -168,6 +168,17 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         Ok(())
     }
 
+    /// Return the parent of the provided node, if available.
+    pub fn get_parent(&self, node: &T) -> Option<&T> {
+        let node_idx = self.nodes_map.get(node)?;
+
+        if let Some(parent_idx) = self.nodes[*node_idx].parent {
+            Some(&self.nodes[parent_idx].value)
+        } else {
+            None
+        }
+    }
+
     /// Moves the specified child to be a direct descendant of the specified parent.
     /// Updates cost data accordingly.
     ///
@@ -318,6 +329,7 @@ mod tests {
 
         // Add a child and make sure everything is ok
         assert!(tree.add_child(&1, 2).is_ok());
+        assert_eq!(tree.get_parent(&2).unwrap(), &1);
         assert_eq!(tree.size(), 2);
 
         // Make the tree bigger

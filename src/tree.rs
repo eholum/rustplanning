@@ -65,7 +65,7 @@ pub struct DepthFirstIterator<'a, T>
 where
     T: 'a + Eq + Clone + Distance + Hash,
 {
-    tree: &'a Tree<T>,
+    tree: &'a HashTree<T>,
     stack: Vec<usize>,
 }
 
@@ -73,7 +73,7 @@ impl<'a, T> DepthFirstIterator<'a, T>
 where
     T: Eq + Clone + Distance + Hash,
 {
-    fn new(tree: &'a Tree<T>) -> Self {
+    fn new(tree: &'a HashTree<T>) -> Self {
         let mut stack = Vec::new();
         if !tree.nodes.is_empty() {
             // Root is always idx 0
@@ -101,17 +101,17 @@ where
     }
 }
 
-/// Tree for use in RRT based-search algorithms.
+/// HashTree for use in RRT based-search algorithms.
 ///
 /// Provides functions for creating, growing, finding the nearest neighbors to `T`,
 /// and rewiring are provided.
-/// Node values must be unique.
+/// Node values must be unique and hashable to support constant time lookups.
 ///
 /// TODO: Make this a KD Tree?
 /// TODO: Is a hashmap dumb?
 /// TODO: Is there a more efficient way to manage ownership of T?
 #[derive(Debug)]
-pub struct Tree<T>
+pub struct HashTree<T>
 where
     T: Eq + Clone + Distance + Hash,
 {
@@ -122,7 +122,7 @@ where
     nodes_map: HashMap<T, usize>,
 }
 
-impl<T: Eq + Clone + Distance + Hash> Tree<T> {
+impl<T: Eq + Clone + Distance + Hash> HashTree<T> {
     /// Construct a new tree with the specified value as the root node.
     ///
     /// The node will take ownership of the provided value.
@@ -135,7 +135,7 @@ impl<T: Eq + Clone + Distance + Hash> Tree<T> {
         nodes.push(root_node);
         nodes_map.insert(val, 0);
 
-        Tree { nodes, nodes_map }
+        HashTree { nodes, nodes_map }
     }
 
     /// Adds the value to the specified node's children
@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn test_tree_children() {
         // Construct tree with a single node
-        let mut tree: Tree<i32> = Tree::new(1);
+        let mut tree: HashTree<i32> = HashTree::new(1);
         assert_eq!(tree.size(), 1);
         assert_eq!(tree.nodes[0].value, 1);
 
@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn test_tree_reparenting() {
-        let mut tree: Tree<i32> = Tree::new(1);
+        let mut tree: HashTree<i32> = HashTree::new(1);
         assert!(tree.add_child(&1, 2).is_ok());
         assert!(tree.add_child(&2, 0).is_ok());
         assert!(approx_eq!(f64, tree.get_node(&0).unwrap().cost, 3.0));
@@ -373,7 +373,7 @@ mod tests {
     #[test]
     fn test_tree_get_nearest() {
         // Construct tree with many nodes
-        let mut tree: Tree<i32> = Tree::new(1);
+        let mut tree: HashTree<i32> = HashTree::new(1);
 
         assert!(tree.add_child(&1, 2).is_ok());
         assert!(tree.add_child(&1, 3).is_ok());
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn test_tree_dfs() {
         // Construct tree with many nodes
-        let mut tree: Tree<i32> = Tree::new(1);
+        let mut tree: HashTree<i32> = HashTree::new(1);
 
         assert!(tree.add_child(&1, 2).is_ok());
         assert!(tree.add_child(&1, 3).is_ok());
@@ -409,7 +409,7 @@ mod tests {
     #[test]
     fn test_tree_compute_back_path() {
         // Construct tree with many nodes
-        let mut tree: Tree<i32> = Tree::new(1);
+        let mut tree: HashTree<i32> = HashTree::new(1);
 
         assert!(tree.add_child(&1, 2).is_ok());
         assert!(tree.add_child(&1, 3).is_ok());
@@ -433,7 +433,7 @@ mod tests {
 
     #[test]
     fn test_tree_nearest_neighbors() {
-        let mut tree: Tree<i32> = Tree::new(1);
+        let mut tree: HashTree<i32> = HashTree::new(1);
 
         assert!(tree.add_child(&1, 2).is_ok());
         assert!(tree.add_child(&1, 4).is_ok());

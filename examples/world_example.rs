@@ -26,7 +26,7 @@ use plotly::common::{Fill, Line, Mode};
 use plotly::{Layout, Plot, Scatter};
 use rand::Rng;
 use rustplanning::planning::rrt::rrtstar;
-use rustplanning::tree::{Distance, Tree};
+use rustplanning::tree::{Distance, HashTree};
 use std::env;
 
 // Define a new wrapper type around `geo::Point<f64>` for robot poses, and
@@ -115,7 +115,7 @@ impl World {
 }
 
 /// Visualize a successful path
-fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &Tree<RobotPose>) {
+fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose>) {
     let mut plot = Plot::new();
 
     // Plot obstacles

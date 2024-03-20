@@ -21,14 +21,14 @@
 // SOFTWARE.
 
 use crate::tree::Distance;
-use crate::tree::Tree;
+use crate::tree::HashTree;
 use std::hash::Hash;
 
 /// Attempts to randomly extend the tree in an arbitrary direction.
 /// Return the new point and the nearest neighbor, if available.
 /// Otherwise return None.
 fn extend_tree<T, FS, FE, FV>(
-    tree: &Tree<T>,
+    tree: &HashTree<T>,
     sample: &mut FS,
     extend: &mut FE,
     is_valid: &mut FV,
@@ -85,7 +85,7 @@ pub fn rrt<T, FS, FE, FV, FD>(
     mut is_valid: FV,
     mut success: FD,
     max_iterations: u64,
-) -> Result<(Vec<T>, Tree<T>), String>
+) -> Result<(Vec<T>, HashTree<T>), String>
 where
     T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
@@ -93,7 +93,7 @@ where
     FV: FnMut(&T) -> bool,
     FD: FnMut(&T) -> bool,
 {
-    let mut tree = Tree::new(start.clone());
+    let mut tree = HashTree::new(start.clone());
 
     for _ in 0..max_iterations {
         let (new_point, nearest) = match extend_tree(&tree, &mut sample, &mut extend, &mut is_valid)
@@ -134,7 +134,7 @@ pub fn rrtstar<T, FS, FE, FV, FD>(
     mut success: FD,
     sample_radius: f64,
     max_iterations: u64,
-) -> Result<(Vec<T>, Tree<T>), String>
+) -> Result<(Vec<T>, HashTree<T>), String>
 where
     T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
@@ -142,7 +142,7 @@ where
     FV: FnMut(&T) -> bool,
     FD: FnMut(&T) -> bool,
 {
-    let mut tree = Tree::new(start.clone());
+    let mut tree = HashTree::new(start.clone());
 
     for _ in 0..max_iterations {
         // Sample the grab the nearest point, and extend in that direction

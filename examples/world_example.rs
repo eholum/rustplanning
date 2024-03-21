@@ -25,7 +25,7 @@ use ordered_float::OrderedFloat;
 use plotly::common::{Fill, Line as PlotlyLine, Mode};
 use plotly::{Layout, Plot, Scatter};
 use rand::Rng;
-use rustplanning::planning::rrt::{rrt, rrtstar};
+use rustplanning::planning::rrt::rrt;
 use rustplanning::tree::{Distance, HashTree};
 use std::env;
 
@@ -242,32 +242,23 @@ pub fn main() {
     let is_valid_fn = |start: &RobotPose, end: &RobotPose| world.is_valid(start, end, buffer);
     let success_fn = |pose: &RobotPose| pose.distance(&end) <= valid_distance;
 
-    let result;
-    let alg;
-    if use_rrtstar {
+    let alg = if use_rrtstar {
         println!("Finding path with RRT*");
-        alg = "RRT*";
-        result = rrtstar(
-            &start,
-            sample_fn,
-            extend_fn,
-            is_valid_fn,
-            success_fn,
-            rewire_radius,
-            100000,
-        );
+        "RRT*"
     } else {
         println!("Finding path with RRT");
-        alg = "RRT";
-        result = rrt(
-            &start,
-            sample_fn,
-            extend_fn,
-            is_valid_fn,
-            success_fn,
-            100000,
-        );
-    }
+        "RRT"
+    };
+    let result = rrt(
+        &start,
+        sample_fn,
+        extend_fn,
+        is_valid_fn,
+        success_fn,
+        use_rrtstar,
+        rewire_radius,
+        100000,
+    );
     match result {
         Ok((path, tree)) => {
             println!("Path found!");

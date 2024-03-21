@@ -247,7 +247,7 @@ impl<T: Eq + Clone + Distance + Hash> HashTree<T> {
 
     /// Finds all nodes that are within the specified radius and returns a map of
     /// all closest elements and their values.
-    pub fn nearest_neighbors(&mut self, val: &T, radius: f64) -> HashMap<T, f64> {
+    pub fn nearest_neighbors(&self, val: &T, radius: f64) -> HashMap<T, f64> {
         // First iterate over all nodes to identify all neighbors
         let mut neighbors = HashMap::new();
         for (_i, check) in self.nodes.iter().enumerate() {

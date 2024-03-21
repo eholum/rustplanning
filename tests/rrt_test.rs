@@ -22,7 +22,7 @@
 
 use ordered_float::OrderedFloat;
 use rand::Rng;
-use rustplanning::planning::rrt::{rrt, rrtstar};
+use rustplanning::planning::rrt::rrt;
 use rustplanning::tree::Distance;
 use std::fmt;
 
@@ -92,13 +92,16 @@ fn run_rrt_test(use_rrtstar: bool) {
     let is_valid = |_: &Point2D, end: &Point2D| end.distance(&obstacle) > 1.0;
     let success = |p: &Point2D| p.distance(&goal) < success_distance;
 
-    let result;
-    if use_rrtstar {
-        result = rrtstar(&start, sample, extend, is_valid, success, 0.2, 10000);
-    }
-    else {
-        result = rrt(&start, sample, extend, is_valid, success, 10000);
-    }
+    let result = rrt(
+        &start,
+        sample,
+        extend,
+        is_valid,
+        success,
+        use_rrtstar,
+        0.2,
+        10000,
+    );
 
     assert!(result.is_ok(), "Expected Ok result, got Err");
 
@@ -112,7 +115,6 @@ fn run_rrt_test(use_rrtstar: bool) {
         end.distance(&goal) < success_distance,
         "Path should end near the goal"
     );
-
 }
 
 #[test]

@@ -52,9 +52,35 @@ where
     Some((new_point, nearest.clone()))
 }
 
-/// Basic RRT implementation.
+fn rewire_tree<T, FV> (
+    tree: &mut HashTree<T>,
+    is_valid: &mut FV,
+    point: &T,
+    rewire_radius: f64,
+)
+where
+    T: Eq + Copy + Hash + Distance,
+    FV: FnMut(&T, &T) -> bool,
+{
+    // Get a list of all nodes that are within the sample radius, and rewire if necessary
+    let neighbors = tree.nearest_neighbors(point, rewire_radius);
+    let new_cost = tree.cost(point).unwrap();
+    for (neighbor, distance) in neighbors.iter() {
+        if neighbor == point {
+            continue;
+        }
+        // If it's cheaper and valid to get to the neighbor from the new node reparent it
+        if distance + new_cost < tree.cost(neighbor).unwrap() {
+            if is_valid(point, neighbor) {
+                let _ = tree.set_parent(neighbor, point);
+            }
+        }
+    }
+}
+
+/// Implementation of RRT planning algorithms.
 ///
-/// Will attempt to compute a path using the RRT algorithm given the specified start pose
+/// Will attempt to compute a path using the specified version of RRT given the start pose
 /// and user-defined coverage functions.
 ///
 /// # Parameters
@@ -64,6 +90,8 @@ where
 /// - `extend`: Given two nodes, function to return an intermediate value between them
 /// - `is_valid`: Function to determine whether or not a link can be added between two nodes
 /// - `success`:  Returns whether or not a node has reached the goal
+/// - `use_rrtstar`: Whether or not to use RRT*
+/// - `rewire_radius`: If using RRT*, the max distance to identify and rewire neighbors of newly added nodes
 /// - `max_iterations`: Maximum number of random samples to attempt before the search fails
 ///
 /// # Returns
@@ -84,59 +112,7 @@ pub fn rrt<T, FS, FE, FV, FD>(
     mut extend: FE,
     mut is_valid: FV,
     mut success: FD,
-    max_iterations: u64,
-) -> Result<(Vec<T>, HashTree<T>), String>
-where
-    T: Eq + Copy + Hash + Distance,
-    FS: FnMut() -> T,
-    FE: FnMut(&T, &T) -> T,
-    FV: FnMut(&T, &T) -> bool,
-    FD: FnMut(&T) -> bool,
-{
-    let mut tree = HashTree::new(start.clone());
-
-    for _ in 0..max_iterations {
-        let (new_point, nearest) = match extend_tree(&tree, &mut sample, &mut extend, &mut is_valid)
-        {
-            Some((new_point, nearest)) => (new_point, nearest),
-            None => continue,
-        };
-
-        if tree.add_child(&nearest, new_point).is_err() {
-            // Then the child wasn't added for some reason so just try again
-            continue;
-        }
-
-        // Are we there yet? If so return the path.
-        if success(&new_point) {
-            match tree.path(&new_point) {
-                Ok(path) => return Ok((path, tree)),
-                Err(e) => return Err(e),
-            }
-        }
-    }
-
-    // Otherwise we've hit max_iter with finding success
-    Err("Failed to find a path".to_string())
-}
-
-/// Basic implementation for RRTStar.
-///
-/// Method signature is nearly identical to [`rrt`], though includes a radius for
-/// rewiring neighbors of sampled nodes.
-///
-/// # Parameters
-///
-/// Are the same as `rrt` excepting for,
-///
-/// - `rewire_radius`: The max distance to identify and rewire neighbors of newly added nodes
-///
-pub fn rrtstar<T, FS, FE, FV, FD>(
-    start: &T,
-    mut sample: FS,
-    mut extend: FE,
-    mut is_valid: FV,
-    mut success: FD,
+    use_rrtstar: bool,
     rewire_radius: f64,
     max_iterations: u64,
 ) -> Result<(Vec<T>, HashTree<T>), String>
@@ -157,23 +133,13 @@ where
             None => continue,
         };
 
-        // If it's valid add it to the tree
-        tree.add_child(&nearest, new_point).unwrap();
-        let new_cost = tree.cost(&new_point).unwrap();
+        if tree.add_child(&nearest, new_point).is_err() {
+            // Then the child wasn't added for some reason so just try again
+            continue;
+        }
 
-        // Get a list of all nodes that are within the sample radius, and rewire if necessary
-        let neighbors = tree.nearest_neighbors(&new_point, rewire_radius);
-        for (neighbor, distance) in neighbors.iter() {
-            if neighbor == &new_point {
-                continue;
-            }
-            if !is_valid(&new_point, neighbor) {
-                continue;
-            }
-            // If it's cheaper to get to the neighbor from the new node reparent it
-            if distance + new_cost < tree.cost(neighbor).unwrap() {
-                tree.set_parent(neighbor, &new_point)?;
-            }
+        if use_rrtstar {
+            rewire_tree(&mut tree, &mut is_valid, &new_point, rewire_radius);
         }
 
         // Are we there yet? If so return the path.

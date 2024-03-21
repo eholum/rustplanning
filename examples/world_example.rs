@@ -152,8 +152,7 @@ fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose
         .collect();
     let path_trace = Scatter::new(path_x, path_y)
         .mode(Mode::Lines)
-        .mode(Mode::Markers)
-        .line(Line::new().color("red"));
+        .line(Line::new().color("red").width(4.0));
     plot.add_trace(path_trace);
 
     // Plot start and end
@@ -217,8 +216,9 @@ pub fn main() {
 
     // Constants for this particular run
     let buffer = 1.0; // All samples must be > 1.0 away from obstacles.
-    let step_size = 0.5; // Distance between existing nodes and samples.
+    let step_size = 1.0; // Distance between existing nodes and samples.
     let valid_distance = 1.0; // Success radius around goal.
+    let rewire_radius = 4.0; // Radius for rewiring tree if using RRT*.
 
     // Define closures
     let sample_fn = || world.sample();
@@ -237,7 +237,7 @@ pub fn main() {
             extend_fn,
             is_valid_fn,
             success_fn,
-            step_size * 2.0,
+            rewire_radius,
             100000);
     } else {
         println!("Finding path with RRT");

@@ -7,13 +7,16 @@ Currently has rough cut versions of both `RRT` and `RRT*`, as well as a basic Ha
 ### Example
 
 Includes [an example](examples/world_example.rs) using a planar world with geometric obstacles built with the [Geo](https://crates.io/crates/geo) crate.
-To run, clone the repo and
+The library will attempt to find a path using either RRT or RRT* and plot the result using [Plotly](https://crates.io/crates/plotly).
 
+To run regular RRT,
 ```
 cargo run --example world_example -- 1.0 1.0 99.0 99.0 false
 ```
+![alt text](examples/rrt_sample.png)
 
-The library will attempt to find a path and plot the result using [Plotly](https://crates.io/crates/plotly).
-An example is shown below.
-
-![alt text](examples/sample_result.png)
+To run RRT*,
+```
+cargo run --example world_example -- 1.0 1.0 99.0 99.0 true
+```
+![alt text](examples/rrt_star_sample.png)

@@ -132,7 +132,7 @@ pub fn rrtstar<T, FS, FE, FV, FD>(
     mut extend: FE,
     mut is_valid: FV,
     mut success: FD,
-    sample_radius: f64,
+    rewire_radius: f64,
     max_iterations: u64,
 ) -> Result<(Vec<T>, HashTree<T>), String>
 where
@@ -151,20 +151,20 @@ where
             Some((new_point, nearest)) => (new_point, nearest),
             None => continue,
         };
-        tree.add_child(&nearest, new_point).unwrap();
 
-        // Identify all nodes within radius distance of the random sample
-        let neighbors = tree.nearest_neighbors(&new_point, sample_radius);
+        // If it's valid add it to the tree
+        tree.add_child(&nearest, new_point).unwrap();
+        let new_cost = tree.cost(&new_point).unwrap();
 
         // Get a list of all nodes that are within the sample radius, and rewire if necessary
-        let new_cost = tree.cost(&new_point).unwrap();
+        let neighbors = tree.nearest_neighbors(&new_point, rewire_radius);
         for (neighbor, distance) in neighbors.iter() {
             if neighbor == &new_point {
                 continue;
             }
-            let chk = distance + tree.cost(&neighbor).unwrap();
-            if new_cost < chk {
-                tree.set_parent(&new_point, neighbor)?;
+            // If it's cheaper to get to the neighbor from the new node reparent it
+            if distance + new_cost < tree.cost(neighbor).unwrap() {
+                tree.set_parent(neighbor, &new_point)?;
             }
         }
 

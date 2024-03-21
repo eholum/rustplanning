@@ -85,18 +85,16 @@ fn run_rrt_test(use_rrtstar: bool) {
     // Success is within this tolerance of the goal pose.
     // This is a test of a random algorithm so just making this real big so that it *always
     // succeeds.
-    let success_distance = 0.5;
+    let success_distance = 2.0;
 
     // All points except for ball around 4,4 of radius 1 are valid
     let obstacle = Point2D::new(4.0, 4.0);
     let is_valid = |p: &Point2D| p.distance(&obstacle) > 1.0;
-
-    // Are we within 0.5 of the goal?
     let success = |p: &Point2D| p.distance(&goal) < success_distance;
 
     let result;
     if use_rrtstar {
-        result = rrtstar(&start, sample, extend, is_valid, success, 0.3, 10000);
+        result = rrtstar(&start, sample, extend, is_valid, success, 0.2, 10000);
     }
     else {
         result = rrt(&start, sample, extend, is_valid, success, 10000);

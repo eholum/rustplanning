@@ -25,7 +25,7 @@ use ordered_float::OrderedFloat;
 use plotly::common::{Fill, Line, Mode};
 use plotly::{Layout, Plot, Scatter};
 use rand::Rng;
-use rustplanning::planning::rrt::rrtstar;
+use rustplanning::planning::rrt::{rrt, rrtstar};
 use rustplanning::tree::{Distance, HashTree};
 use std::env;
 
@@ -106,16 +106,16 @@ impl World {
         RobotPose::new(x, y)
     }
 
-    pub fn is_valid(&self, p: &RobotPose) -> bool {
+    pub fn is_valid(&self, p: &RobotPose, buffer: f64) -> bool {
         !self
             .obstacles
             .iter()
-            .any(|obstacle| p.to_point().euclidean_distance(obstacle) <= 0.0)
+            .any(|obstacle| p.to_point().euclidean_distance(obstacle) <= buffer)
     }
 }
 
 /// Visualize a successful path
-fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose>) {
+fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose>, algorithm: &str) {
     let mut plot = Plot::new();
 
     // Plot obstacles
@@ -175,7 +175,7 @@ fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose
     plot.add_trace(end_trace);
 
     let layout = Layout::new()
-        .title("RRT* Path Finding Result".into())
+        .title(format!("{algorithm} Path Finding Result").as_str().into())
         .show_legend(false)
         .width(750)
         .height(750)
@@ -188,8 +188,8 @@ fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 5 {
-        eprintln!("Usage: program start_x start_y end_x end_y");
+    if args.len() != 6 { // Adjusted for the additional argument
+        eprintln!("Usage: program start_x start_y end_x end_y use_rrtstar");
         return;
     }
 
@@ -197,6 +197,7 @@ pub fn main() {
     let start_y: f64 = args[2].parse().expect("Invalid start_y");
     let end_x: f64 = args[3].parse().expect("Invalid end_x");
     let end_y: f64 = args[4].parse().expect("Invalid end_y");
+    let use_rrtstar: bool = args[5].parse().expect("Invalid use_rrtstar argument; should be true or false");
 
     let start = RobotPose::new(start_x, start_y);
     let end = RobotPose::new(end_x, end_y);
@@ -214,25 +215,45 @@ pub fn main() {
 
     let world = World::new(100.0, 100.0, obstacles);
 
-    // Define closures for rrtstar
-    let sample_fn = || world.sample();
-    let extend_fn = |from: &RobotPose, to: &RobotPose| from.extend(to, 0.5);
-    let is_valid_fn = |pose: &RobotPose| world.is_valid(pose);
-    let success_fn = |pose: &RobotPose| pose.distance(&end) <= 3.0;
+    // Constants for this particular run
+    let buffer = 1.0; // All samples must be > 1.0 away from obstacles.
+    let step_size = 0.5; // Distance between existing nodes and samples.
+    let valid_distance = 1.0; // Success radius around goal.
 
-    // Call rrtstar
-    match rrtstar(
-        &start,
-        sample_fn,
-        extend_fn,
-        is_valid_fn,
-        success_fn,
-        5.0,
-        100000,
-    ) {
+    // Define closures
+    let sample_fn = || world.sample();
+    let extend_fn = |from: &RobotPose, to: &RobotPose| from.extend(to, step_size);
+    let is_valid_fn = |pose: &RobotPose| world.is_valid(pose, buffer);
+    let success_fn = |pose: &RobotPose| pose.distance(&end) <= valid_distance;
+
+    let result;
+    let alg;
+    if use_rrtstar {
+        println!("Finding path with RRT*");
+        alg = "RRT*";
+        result = rrtstar(
+            &start,
+            sample_fn,
+            extend_fn,
+            is_valid_fn,
+            success_fn,
+            step_size * 2.0,
+            100000);
+    } else {
+        println!("Finding path with RRT");
+        alg = "RRT";
+        result = rrt(
+            &start,
+            sample_fn,
+            extend_fn,
+            is_valid_fn,
+            success_fn,
+            100000);
+    }
+    match result {
         Ok((path, tree)) => {
             println!("Path found!");
-            visualize_rrt(&world, &path, &tree)
+            visualize_rrt(&world, &path, &tree, alg)
         }
         Err(e) => {
             println!("RRT* failed: {}", e);

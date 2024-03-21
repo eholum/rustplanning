@@ -151,22 +151,22 @@ where
             Some((new_point, nearest)) => (new_point, nearest),
             None => continue,
         };
+        tree.add_child(&nearest, new_point).unwrap();
 
-        // Compute the cost to reach the new node from the nearest node
-        let new_cost = new_point.distance(&nearest) + tree.cost(&nearest).unwrap();
-
-        // Get a list of all nodes that are within the sample radius
+        // Identify all nodes within radius distance of the random sample
         let neighbors = tree.nearest_neighbors(&new_point, sample_radius);
 
-        // Rewire the tree
-        for (neighbor, cost) in neighbors.iter() {
-            if new_cost + neighbor.distance(&new_point) < *cost {
+        // Get a list of all nodes that are within the sample radius, and rewire if necessary
+        let new_cost = tree.cost(&new_point).unwrap();
+        for (neighbor, distance) in neighbors.iter() {
+            if neighbor == &new_point {
+                continue;
+            }
+            let chk = distance + tree.cost(&neighbor).unwrap();
+            if new_cost < chk {
                 tree.set_parent(&new_point, neighbor)?;
             }
         }
-
-        // Abort if something goes wrong...
-        tree.add_child(&nearest, new_point).unwrap();
 
         // Are we there yet? If so return the path.
         if success(&new_point) {

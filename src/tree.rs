@@ -186,7 +186,7 @@ impl<T: Eq + Clone + Distance + Hash> HashTree<T> {
     ///
     /// If either the child or the parent are not in the tree.
     /// If the child is the root of the tree.
-    pub fn set_parent(&mut self, parent: &T, child: &T) -> Result<(), String> {
+    pub fn set_parent(&mut self, child: &T, parent: &T) -> Result<(), String> {
         // Validate that this is a reasonable request
         let parent_idx = *self
             .nodes_map
@@ -197,9 +197,9 @@ impl<T: Eq + Clone + Distance + Hash> HashTree<T> {
             return Err("Cannot reparent the root of the tree!".to_string());
         }
 
-        // Remove the child from its existing parent
-        let existing_parent = self.nodes[child_idx].parent.unwrap();
-        self.nodes[existing_parent].children.remove(&child_idx);
+        // Remove the child from the parent
+        let cur_parent = self.nodes[child_idx].parent.unwrap();
+        self.nodes[cur_parent].children.remove(&child_idx);
 
         // Update relationships
         self.nodes[child_idx].parent = Some(parent_idx);
@@ -250,11 +250,10 @@ impl<T: Eq + Clone + Distance + Hash> HashTree<T> {
     pub fn nearest_neighbors(&mut self, val: &T, radius: f64) -> HashMap<T, f64> {
         // First iterate over all nodes to identify all neighbors
         let mut neighbors = HashMap::new();
-        for (i, check) in self.nodes.iter().enumerate() {
-            // Compute and check distances
+        for (_i, check) in self.nodes.iter().enumerate() {
             let distance = val.distance(&check.value);
             if distance <= radius {
-                neighbors.insert(self.nodes[i].value.clone(), distance);
+                neighbors.insert(check.value.clone(), distance);
             }
         }
 
@@ -285,6 +284,7 @@ impl<T: Eq + Clone + Distance + Hash> HashTree<T> {
         while let Some(idx) = cur_idx {
             path.push(self.nodes[idx].value.clone());
             cur_idx = self.nodes[idx].parent;
+
         }
 
         // Reverse it to get the path in order
@@ -359,12 +359,12 @@ mod tests {
         assert_eq!(tree.get_node(&2).unwrap().children.len(), 1);
 
         // Validate failures
-        assert!(tree.set_parent(&2, &1).is_err());
-        assert!(tree.set_parent(&1, &4).is_err());
-        assert!(tree.set_parent(&3, &2).is_err());
+        assert!(tree.set_parent(&1, &2).is_err());
+        assert!(tree.set_parent(&4, &1).is_err());
+        assert!(tree.set_parent(&2, &3).is_err());
 
         // Reparent and validate the tree
-        assert!(tree.set_parent(&1, &0).is_ok());
+        assert!(tree.set_parent(&0, &1).is_ok());
         assert!(approx_eq!(f64, tree.get_node(&0).unwrap().cost, 1.0));
         assert_eq!(tree.get_node(&1).unwrap().children.len(), 2);
         assert_eq!(tree.get_node(&2).unwrap().children.len(), 0);

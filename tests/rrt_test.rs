@@ -89,7 +89,7 @@ fn run_rrt_test(use_rrtstar: bool) {
 
     // All points except for ball around 4,4 of radius 1 are valid
     let obstacle = Point2D::new(4.0, 4.0);
-    let is_valid = |p: &Point2D| p.distance(&obstacle) > 1.0;
+    let is_valid = |_: &Point2D, end: &Point2D| end.distance(&obstacle) > 1.0;
     let success = |p: &Point2D| p.distance(&goal) < success_distance;
 
     let result;

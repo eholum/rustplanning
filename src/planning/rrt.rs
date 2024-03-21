@@ -37,7 +37,7 @@ where
     T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
     FE: FnMut(&T, &T) -> T,
-    FV: FnMut(&T) -> bool,
+    FV: FnMut(&T, &T) -> bool,
 {
     // Sample the grab the nearest point, and extend in that direction
     let s = sample();
@@ -45,7 +45,7 @@ where
     let new_point = extend(&nearest, &s);
 
     // If it is an invalid point try again
-    if !is_valid(&new_point) {
+    if !is_valid(nearest, &new_point) {
         return None;
     }
 
@@ -60,10 +60,10 @@ where
 /// # Parameters
 ///
 /// - `start`: The reference to the starting pose of type `T`
-/// - `sample`: Generate a random sample pose over the search space
-/// - `extend`: Function to extend a pose towards a randomly sampled pose
-/// - `is_valid`: Determines whether or not a pose is valid
-/// - `success`: Determines whether or not we have reached the goal
+/// - `sample`: Function to randomly sample the configuration space
+/// - `extend`: Given two nodes, function to return an intermediate value between them
+/// - `is_valid`: Function to determine whether or not a link can be added between two nodes
+/// - `success`:  Returns whether or not a node has reached the goal
 /// - `max_iterations`: Maximum number of random samples to attempt before the search fails
 ///
 /// # Returns
@@ -76,7 +76,7 @@ where
 ///
 /// # Example
 ///
-/// See the integration tests for an example.
+/// Refer to the world example or integration tests.
 ///
 pub fn rrt<T, FS, FE, FV, FD>(
     start: &T,
@@ -90,7 +90,7 @@ where
     T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
     FE: FnMut(&T, &T) -> T,
-    FV: FnMut(&T) -> bool,
+    FV: FnMut(&T, &T) -> bool,
     FD: FnMut(&T) -> bool,
 {
     let mut tree = HashTree::new(start.clone());
@@ -125,7 +125,12 @@ where
 /// Method signature is nearly identical to [`rrt`], though includes a radius for
 /// rewiring neighbors of sampled nodes.
 ///
-/// Refer to the integration tests for an example.
+/// # Parameters
+///
+/// Are the same as `rrt` excepting for,
+///
+/// - `rewire_radius`: The max distance to identify and rewire neighbors of newly added nodes
+///
 pub fn rrtstar<T, FS, FE, FV, FD>(
     start: &T,
     mut sample: FS,
@@ -139,7 +144,7 @@ where
     T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
     FE: FnMut(&T, &T) -> T,
-    FV: FnMut(&T) -> bool,
+    FV: FnMut(&T, &T) -> bool,
     FD: FnMut(&T) -> bool,
 {
     let mut tree = HashTree::new(start.clone());
@@ -160,6 +165,9 @@ where
         let neighbors = tree.nearest_neighbors(&new_point, rewire_radius);
         for (neighbor, distance) in neighbors.iter() {
             if neighbor == &new_point {
+                continue;
+            }
+            if !is_valid(&new_point, neighbor) {
                 continue;
             }
             // If it's cheaper to get to the neighbor from the new node reparent it

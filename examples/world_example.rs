@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use geo::{polygon, EuclideanDistance, Point, Polygon};
+use geo::{coord, polygon, Coord, EuclideanDistance, Line, Point, Polygon};
 use ordered_float::OrderedFloat;
-use plotly::common::{Fill, Line, Mode};
+use plotly::common::{Fill, Line as PlotlyLine, Mode};
 use plotly::{Layout, Plot, Scatter};
 use rand::Rng;
 use rustplanning::planning::rrt::{rrt, rrtstar};
@@ -46,6 +46,10 @@ impl RobotPose {
 
     fn to_point(&self) -> Point<f64> {
         Point::new(self.inner().x().into_inner(), self.inner().y().into_inner())
+    }
+
+    fn to_coord(&self) -> Coord<f64> {
+        coord! {x: self.inner().x().into_inner(), y: self.inner().y().into_inner()}
     }
 
     fn extend(&self, end: &Self, step_size: f64) -> Self {
@@ -106,16 +110,25 @@ impl World {
         RobotPose::new(x, y)
     }
 
-    pub fn is_valid(&self, p: &RobotPose, buffer: f64) -> bool {
+    /// Returns whether or not a line between the two provided poses intersects with
+    /// any obstacles.
+    pub fn is_valid(&self, start: &RobotPose, end: &RobotPose, buffer: f64) -> bool {
+        // Create a line between poses
+        let line = Line::new(start.to_coord(), end.to_coord());
         !self
             .obstacles
             .iter()
-            .any(|obstacle| p.to_point().euclidean_distance(obstacle) <= buffer)
+            .any(|obstacle| line.euclidean_distance(obstacle) <= buffer)
     }
 }
 
 /// Visualize a successful path
-fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose>, algorithm: &str) {
+fn visualize_rrt(
+    world: &World,
+    path: &Vec<RobotPose>,
+    tree: &HashTree<RobotPose>,
+    algorithm: &str,
+) {
     let mut plot = Plot::new();
 
     // Plot obstacles
@@ -124,7 +137,7 @@ fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose
         let trace = Scatter::new(x, y)
             .fill(Fill::ToSelf)
             .fill_color("black")
-            .line(Line::new().color("black"))
+            .line(PlotlyLine::new().color("black"))
             .opacity(1.0);
         plot.add_trace(trace);
     }
@@ -136,7 +149,7 @@ fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose
             let parent = parent_pose.to_point();
             let trace = Scatter::new(vec![p.x(), parent.x()], vec![p.y(), parent.y()])
                 .mode(Mode::Lines)
-                .line(Line::new().color("blue"));
+                .line(PlotlyLine::new().color("blue"));
             plot.add_trace(trace);
         }
     }
@@ -152,7 +165,7 @@ fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose
         .collect();
     let path_trace = Scatter::new(path_x, path_y)
         .mode(Mode::Lines)
-        .line(Line::new().color("red").width(4.0));
+        .line(PlotlyLine::new().color("red").width(4.0));
     plot.add_trace(path_trace);
 
     // Plot start and end
@@ -187,7 +200,8 @@ fn visualize_rrt(world: &World, path: &Vec<RobotPose>, tree: &HashTree<RobotPose
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 6 { // Adjusted for the additional argument
+    if args.len() != 6 {
+        // Adjusted for the additional argument
         eprintln!("Usage: program start_x start_y end_x end_y use_rrtstar");
         return;
     }
@@ -196,7 +210,9 @@ pub fn main() {
     let start_y: f64 = args[2].parse().expect("Invalid start_y");
     let end_x: f64 = args[3].parse().expect("Invalid end_x");
     let end_y: f64 = args[4].parse().expect("Invalid end_y");
-    let use_rrtstar: bool = args[5].parse().expect("Invalid use_rrtstar argument; should be true or false");
+    let use_rrtstar: bool = args[5]
+        .parse()
+        .expect("Invalid use_rrtstar argument; should be true or false");
 
     let start = RobotPose::new(start_x, start_y);
     let end = RobotPose::new(end_x, end_y);
@@ -223,7 +239,7 @@ pub fn main() {
     // Define closures
     let sample_fn = || world.sample();
     let extend_fn = |from: &RobotPose, to: &RobotPose| from.extend(to, step_size);
-    let is_valid_fn = |pose: &RobotPose| world.is_valid(pose, buffer);
+    let is_valid_fn = |start: &RobotPose, end: &RobotPose| world.is_valid(start, end, buffer);
     let success_fn = |pose: &RobotPose| pose.distance(&end) <= valid_distance;
 
     let result;
@@ -238,7 +254,8 @@ pub fn main() {
             is_valid_fn,
             success_fn,
             rewire_radius,
-            100000);
+            100000,
+        );
     } else {
         println!("Finding path with RRT");
         alg = "RRT";
@@ -248,7 +265,8 @@ pub fn main() {
             extend_fn,
             is_valid_fn,
             success_fn,
-            100000);
+            100000,
+        );
     }
     match result {
         Ok((path, tree)) => {

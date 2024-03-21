@@ -10,7 +10,7 @@ Includes [an example](examples/world_example.rs) using a planar world with geome
 To run, clone the repo and
 
 ```
-cargo run --example world_example -- 1.0 1.0 99.0 99.0
+cargo run --example world_example -- 1.0 1.0 99.0 99.0 false
 ```
 
 The library will attempt to find a path and plot the result using [Plotly](https://crates.io/crates/plotly).

@@ -13,6 +13,7 @@ repository = "https://github.com/eholum/rustplanning"
 linked_hash_set = "0.1.4"
 
 [dev-dependencies]
+codspeed-criterion-compat = "1.1.0"
 ordered-float = "4.2.0"
 rand = "0.8.3"
 float-cmp = "0.9.0"
@@ -24,3 +25,7 @@ plotly = "0.8.4"
 [lints.clippy]
 module_name_repetitions = { level = "allow", priority = 1 }
 pedantic = { level = "deny", priority = 0 }
+
+[[bench]]
+name = "rrt_bench"
+harness = false

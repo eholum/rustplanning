@@ -111,14 +111,21 @@ impl World {
     }
 
     /// Returns whether or not a line between the two provided poses intersects with
-    /// any obstacles.
-    pub fn is_valid(&self, start: &RobotPose, end: &RobotPose, buffer: f64) -> bool {
-        // Create a line between poses
-        let line = Line::new(start.to_coord(), end.to_coord());
-        !self
+    /// any obstacles and if the distance is within the maximum connectable step size.
+    pub fn connectable(
+        &self,
+        from: &RobotPose,
+        to: &RobotPose,
+        buffer: f64,
+        step_size: f64,
+    ) -> bool {
+        let line = Line::new(from.to_coord(), to.to_coord());
+        let intersects = self
             .obstacles
             .iter()
-            .any(|obstacle| line.euclidean_distance(obstacle) <= buffer)
+            .any(|obstacle| line.euclidean_distance(obstacle) < buffer);
+        let reachable = from.distance(to) < step_size;
+        !intersects && reachable
     }
 }
 
@@ -149,7 +156,7 @@ fn visualize_rrt(
             let parent = parent_pose.to_point();
             let trace = Scatter::new(vec![p.x(), parent.x()], vec![p.y(), parent.y()])
                 .mode(Mode::Lines)
-                .line(PlotlyLine::new().color("blue"));
+                .line(PlotlyLine::new().color("blue").width(1.0));
             plot.add_trace(trace);
         }
     }
@@ -215,7 +222,7 @@ pub fn main() {
         .expect("Invalid use_rrtstar argument; should be true or false");
 
     let start = RobotPose::new(start_x, start_y);
-    let end = RobotPose::new(end_x, end_y);
+    let goal = RobotPose::new(end_x, end_y);
 
     println!("Start pose: ({}, {})", start_x, start_y);
     println!("End pose: ({}, {})", end_x, end_y);
@@ -233,14 +240,13 @@ pub fn main() {
     // Constants for this particular run
     let buffer = 1.0; // All samples must be > 1.0 away from obstacles.
     let step_size = 1.0; // Distance between existing nodes and samples.
-    let valid_distance = 1.0; // Success radius around goal.
-    let rewire_radius = 4.0; // Radius for rewiring tree if using RRT*.
+    let rewire_radius = 5.0; // Radius for rewiring tree if using RRT*.
 
     // Define closures
     let sample_fn = || world.sample();
     let extend_fn = |from: &RobotPose, to: &RobotPose| from.extend(to, step_size);
-    let is_valid_fn = |start: &RobotPose, end: &RobotPose| world.is_valid(start, end, buffer);
-    let success_fn = |pose: &RobotPose| pose.distance(&end) <= valid_distance;
+    let connectable_fn =
+        |from: &RobotPose, to: &RobotPose| world.connectable(from, to, buffer, rewire_radius);
 
     let alg = if use_rrtstar {
         println!("Finding path with RRT*");
@@ -251,10 +257,10 @@ pub fn main() {
     };
     let result = rrt(
         &start,
+        &goal,
         sample_fn,
         extend_fn,
-        is_valid_fn,
-        success_fn,
+        connectable_fn,
         use_rrtstar,
         rewire_radius,
         100000,

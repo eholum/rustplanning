@@ -25,6 +25,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use rustplanning::planning::rrt::rrt;
 use rustplanning::tree::Distance;
+use std::f64::EPSILON;
 use std::fmt;
 
 /// Basic 2D point class for representing hashable points in the plane
@@ -80,26 +81,26 @@ fn extend_2d(start: &Point2D, end: &Point2D, step_size: f64) -> Point2D {
 fn run_rrt(use_rrtstar: bool, start: &Point2D, goal: &Point2D, grid_size: f64) {
     // Seed the generator for consistency
     let mut rng = StdRng::seed_from_u64(1);
-
-    // Success is within this tolerance of the goal pose, it's big.
-    let success_distance = 2.0;
+    let step_size = 1.0;
 
     // Define closures
     let obstacle = Point2D::new(grid_size / 2.0, grid_size / 2.0); // All points except for ball in the center are valid
-    let is_valid_fn = |_: &Point2D, end: &Point2D| end.distance(&obstacle) > 3.0;
-    let success_fn = |p: &Point2D| p.distance(&goal) < success_distance;
-    let extend_fn = |start: &Point2D, end: &Point2D| extend_2d(start, end, 0.1);
+    let extend_fn = |start: &Point2D, end: &Point2D| extend_2d(start, end, step_size);
     let mut sample_fn = || sample_2d(&mut rng, grid_size, grid_size);
+    let connectable_fn = |start: &Point2D, end: &Point2D| {
+        end.distance(&obstacle) > 3.0 &&
+        start.distance(end) < step_size
+    };
 
     let result = rrt(
         start,
+        goal,
         &mut sample_fn,
         &extend_fn,
-        &is_valid_fn,
-        &success_fn,
+        &connectable_fn,
         use_rrtstar,
-        0.2,
-        10000,
+        2.0,
+        100000,
     );
 
     assert!(result.is_ok(), "Expected Ok result, got Err");
@@ -111,8 +112,8 @@ fn run_rrt(use_rrtstar: bool, start: &Point2D, goal: &Point2D, grid_size: f64) {
     // Verify it ends at the goal
     let end = path.last().unwrap();
     assert!(
-        end.distance(&goal) < success_distance,
-        "Path should end near the goal"
+        end.distance(&goal) < EPSILON,
+        "Path should end at the goal"
     );
 }
 

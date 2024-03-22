@@ -27,17 +27,17 @@ use std::hash::Hash;
 /// Attempts to randomly extend the tree in an arbitrary direction.
 /// Return the new point and the nearest neighbor, if available.
 /// Otherwise return None.
-fn extend_tree<T, FS, FE, FV>(
+fn extend_tree<T, FS, FE, FC>(
     tree: &HashTree<T>,
     sample: &mut FS,
     extend: &mut FE,
-    is_valid: &mut FV,
+    connectable: &mut FC,
 ) -> Option<(T, T)>
 where
     T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
     FE: FnMut(&T, &T) -> T,
-    FV: FnMut(&T, &T) -> bool,
+    FC: FnMut(&T, &T) -> bool,
 {
     // Sample the grab the nearest point, and extend in that direction
     let s = sample();
@@ -45,28 +45,35 @@ where
     let new_point = extend(&nearest, &s);
 
     // If it is an invalid point try again
-    if !is_valid(nearest, &new_point) {
+    if !connectable(nearest, &new_point) {
         return None;
     }
 
     Some((new_point, nearest.clone()))
 }
 
-fn rewire_tree<T, FV>(tree: &mut HashTree<T>, is_valid: &mut FV, point: &T, rewire_radius: f64)
+fn rewire_tree<T, FC> (
+    tree: &mut HashTree<T>,
+    connectable: &mut FC,
+    point: &T,
+    rewire_radius: f64,
+)
 where
     T: Eq + Copy + Hash + Distance,
-    FV: FnMut(&T, &T) -> bool,
+    FC: FnMut(&T, &T) -> bool,
 {
     // Get a list of all nodes that are within the sample radius, and rewire if necessary
     let neighbors = tree.nearest_neighbors(point, rewire_radius);
-    let new_cost = tree.cost(point).unwrap();
+    let point_cost = tree.cost(point).unwrap();
     for (neighbor, distance) in neighbors.iter() {
         if neighbor == point {
             continue;
         }
         // If it's cheaper and valid to get to the neighbor from the new node reparent it
-        if distance + new_cost < tree.cost(neighbor).unwrap() {
-            if is_valid(point, neighbor) {
+        let old_cost = tree.cost(neighbor).unwrap();
+        let new_cost = distance + point_cost;
+        if new_cost < old_cost {
+            if connectable(point, neighbor) {
                 let _ = tree.set_parent(neighbor, point);
             }
         }
@@ -83,8 +90,8 @@ where
 /// - `start`: The reference to the starting pose of type `T`
 /// - `sample`: Function to randomly sample the configuration space
 /// - `extend`: Given two nodes, function to return an intermediate value between them
-/// - `is_valid`: Function to determine whether or not a link can be added between two nodes
-/// - `success`:  Returns whether or not a node has reached the goal
+/// - `connectable`: Function to determine whether or not a link can be added between two nodes. If a sampled node is
+///                  connectable to the goal, we return success.
 /// - `use_rrtstar`: Whether or not to use RRT*
 /// - `rewire_radius`: If using RRT*, the max distance to identify and rewire neighbors of newly added nodes
 /// - `max_iterations`: Maximum number of random samples to attempt before the search fails
@@ -101,12 +108,12 @@ where
 ///
 /// Refer to the world example or integration tests.
 ///
-pub fn rrt<T, FS, FE, FV, FD>(
+pub fn rrt<T, FS, FE, FC,>(
     start: &T,
+    goal: &T,
     mut sample: FS,
     mut extend: FE,
-    mut is_valid: FV,
-    mut success: FD,
+    mut connectable: FC,
     use_rrtstar: bool,
     rewire_radius: f64,
     max_iterations: u64,
@@ -115,14 +122,13 @@ where
     T: Eq + Copy + Hash + Distance,
     FS: FnMut() -> T,
     FE: FnMut(&T, &T) -> T,
-    FV: FnMut(&T, &T) -> bool,
-    FD: FnMut(&T) -> bool,
+    FC: FnMut(&T, &T) -> bool,
 {
     let mut tree = HashTree::new(start.clone());
 
     for _ in 0..max_iterations {
         // Sample the grab the nearest point, and extend in that direction
-        let (new_point, nearest) = match extend_tree(&tree, &mut sample, &mut extend, &mut is_valid)
+        let (new_point, nearest) = match extend_tree(&tree, &mut sample, &mut extend, &mut connectable)
         {
             Some((new_point, nearest)) => (new_point, nearest),
             None => continue,
@@ -134,12 +140,13 @@ where
         }
 
         if use_rrtstar {
-            rewire_tree(&mut tree, &mut is_valid, &new_point, rewire_radius);
+            rewire_tree(&mut tree, &mut connectable, &new_point, rewire_radius);
         }
 
         // Are we there yet? If so return the path.
-        if success(&new_point) {
-            match tree.path(&new_point) {
+        if connectable(goal, &new_point) {
+            let _ = tree.add_child(&new_point, *goal);
+            match tree.path(goal) {
                 Ok(path) => return Ok((path, tree)),
                 Err(e) => return Err(e),
             }
@@ -161,8 +168,7 @@ mod tests {
 
     #[test]
     fn test_rewire_tree() {
-        // Tree is
-        // 2 -> 4 -> 1
+        // Tree is: 2 -> 4 -> 1
         let mut tree: HashTree<i32> = HashTree::new(2);
         assert!(tree.add_child(&2, 4).is_ok());
         assert!(tree.add_child(&4, 1).is_ok());
@@ -170,6 +176,7 @@ mod tests {
 
         assert_eq!(tree.get_parent(&4).unwrap(), &2);
         assert_eq!(tree.get_parent(&1).unwrap(), &4);
+        assert_eq!(tree.cost(&1).unwrap(), 5.0);
 
         // When we rewire at 2, 1 should be reparented
         // 2 -> 1
@@ -177,5 +184,6 @@ mod tests {
         rewire_tree(&mut tree, &mut is_valid_fn, &2, 5.0);
         assert_eq!(tree.get_parent(&4).unwrap(), &2);
         assert_eq!(tree.get_parent(&1).unwrap(), &2);
+        assert_eq!(tree.cost(&1).unwrap(), 1.0);
     }
 }

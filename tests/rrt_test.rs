@@ -21,7 +21,8 @@
 // SOFTWARE.
 
 use ordered_float::OrderedFloat;
-use rand::Rng;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use rustplanning::planning::rrt::rrt;
 use rustplanning::tree::Distance;
 use std::fmt;
@@ -60,44 +61,42 @@ impl fmt::Display for Point2D {
     }
 }
 
-/// Function for randomly sampling the 2-D plane between (0, 0) and (10.0, 10.0)
-fn sample() -> Point2D {
-    let mut rng = rand::thread_rng();
-    Point2D::new(rng.gen_range(0.0..=10.0), rng.gen_range(0.0..=10.0))
+/// Function for randomly sampling the 2-D plane
+fn sample_2d(rng: &mut StdRng, max_x: f64, max_y: f64) -> Point2D {
+    Point2D::new(rng.gen_range(0.0..=max_x), rng.gen_range(0.0..=max_y))
 }
 
-// Returns a point that is 0.1 along the line between the specified start and end pose
-fn extend(start: &Point2D, end: &Point2D) -> Point2D {
+// Returns a point that is step_size along the line between the specified start and end pose
+fn extend_2d(start: &Point2D, end: &Point2D, step_size: f64) -> Point2D {
     let direction = (end.0 - start.0, end.1 - start.1);
     let length = (direction.0.powi(2) + direction.1.powi(2)).sqrt();
     let norm_direction = (direction.0 / length, direction.1 / length);
-    let step_size = 0.1;
     Point2D(
         start.0 + norm_direction.0 * step_size,
         start.1 + norm_direction.1 * step_size,
     )
 }
 
-fn run_rrt_test(use_rrtstar: bool) {
-    let start = Point2D::new(0.0, 0.0);
-    let goal = Point2D::new(9.0, 9.0);
+fn run_rrt(use_rrtstar: bool, start: &Point2D, goal: &Point2D, grid_size: f64) {
+    // Seed the generator for consistency
+    let mut rng = StdRng::seed_from_u64(1);
 
-    // Success is within this tolerance of the goal pose.
-    // This is a test of a random algorithm so just making this real big so that it *always
-    // succeeds.
+    // Success is within this tolerance of the goal pose, it's big.
     let success_distance = 2.0;
 
-    // All points except for ball around 4,4 of radius 1 are valid
-    let obstacle = Point2D::new(4.0, 4.0);
-    let is_valid = |_: &Point2D, end: &Point2D| end.distance(&obstacle) > 1.0;
-    let success = |p: &Point2D| p.distance(&goal) < success_distance;
+    // Define closures
+    let obstacle = Point2D::new(grid_size / 2.0, grid_size / 2.0); // All points except for ball in the center are valid
+    let is_valid_fn = |_: &Point2D, end: &Point2D| end.distance(&obstacle) > 3.0;
+    let success_fn = |p: &Point2D| p.distance(&goal) < success_distance;
+    let extend_fn = |start: &Point2D, end: &Point2D| extend_2d(start, end, 0.1);
+    let mut sample_fn = || sample_2d(&mut rng, grid_size, grid_size);
 
     let result = rrt(
-        &start,
-        sample,
-        extend,
-        is_valid,
-        success,
+        start,
+        &mut sample_fn,
+        &extend_fn,
+        &is_valid_fn,
+        &success_fn,
         use_rrtstar,
         0.2,
         10000,
@@ -107,7 +106,7 @@ fn run_rrt_test(use_rrtstar: bool) {
 
     let (path, _) = result.unwrap();
     assert!(!path.is_empty(), "Path should not be empty");
-    assert_eq!(path[0], start, "Path should start at the start point");
+    assert_eq!(path[0], *start, "Path should start at the start point");
 
     // Verify it ends at the goal
     let end = path.last().unwrap();
@@ -119,10 +118,16 @@ fn run_rrt_test(use_rrtstar: bool) {
 
 #[test]
 fn test_rrt() {
-    run_rrt_test(false);
+    let start = Point2D::new(1.0, 1.0);
+    let end = Point2D::new(10.0, 10.0);
+    let grid_size = 10.0;
+    run_rrt(false, &start, &end, grid_size);
 }
 
 #[test]
 fn test_rrtstar() {
-    run_rrt_test(true);
+    let start = Point2D::new(1.0, 1.0);
+    let end = Point2D::new(10.0, 10.0);
+    let grid_size = 10.0;
+    run_rrt(true, &start, &end, grid_size);
 }

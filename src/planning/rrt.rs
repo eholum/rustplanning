@@ -52,12 +52,7 @@ where
     Some((new_point, nearest.clone()))
 }
 
-fn rewire_tree<T, FV> (
-    tree: &mut HashTree<T>,
-    is_valid: &mut FV,
-    point: &T,
-    rewire_radius: f64,
-)
+fn rewire_tree<T, FV>(tree: &mut HashTree<T>, is_valid: &mut FV, point: &T, rewire_radius: f64)
 where
     T: Eq + Copy + Hash + Distance,
     FV: FnMut(&T, &T) -> bool,
@@ -153,4 +148,34 @@ where
 
     // Otherwise we've hit max_iter with finding success
     Err("Failed to find a path".to_string())
+}
+
+//
+// Unit tests
+//
+
+#[cfg(test)]
+mod tests {
+
+    use crate::{planning::rrt::rewire_tree, tree::HashTree};
+
+    #[test]
+    fn test_rewire_tree() {
+        // Tree is
+        // 2 -> 4 -> 1
+        let mut tree: HashTree<i32> = HashTree::new(2);
+        assert!(tree.add_child(&2, 4).is_ok());
+        assert!(tree.add_child(&4, 1).is_ok());
+        let mut is_valid_fn = |_: &i32, _: &i32| -> bool { true };
+
+        assert_eq!(tree.get_parent(&4).unwrap(), &2);
+        assert_eq!(tree.get_parent(&1).unwrap(), &4);
+
+        // When we rewire at 2, 1 should be reparented
+        // 2 -> 1
+        //   -> 4
+        rewire_tree(&mut tree, &mut is_valid_fn, &2, 5.0);
+        assert_eq!(tree.get_parent(&4).unwrap(), &2);
+        assert_eq!(tree.get_parent(&1).unwrap(), &2);
+    }
 }

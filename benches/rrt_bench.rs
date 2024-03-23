@@ -92,6 +92,8 @@ fn run_rrt(use_rrtstar: bool, start: &Point2D, goal: &Point2D, grid_size: f64) {
         use_rrtstar,
         rewire_radius,
         100000,
+        10.0,
+        true,
     );
 
     assert!(result.is_ok(), "Expected Ok result, got Err");

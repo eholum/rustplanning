@@ -23,6 +23,7 @@
 use crate::tree::Distance;
 use crate::tree::HashTree;
 use std::hash::Hash;
+use std::time::{Duration, Instant};
 
 /// Attempts to randomly extend the tree in an arbitrary direction.
 /// Return the new point and the nearest neighbor, if available.
@@ -95,6 +96,8 @@ where
 /// - `use_rrtstar`: Whether or not to use RRT*
 /// - `rewire_radius`: If using RRT*, the max distance to identify and rewire neighbors of newly added nodes
 /// - `max_iterations`: Maximum number of random samples to attempt before the search fails
+/// - `max_duration`: Maximum amount of time in seconds to find a solution
+/// - `fast_return`: Return as soon as a solution is found, or iterate until max_iterations or max_duration is reached
 ///
 /// # Returns
 /// Returns a `Result` containing either:
@@ -117,6 +120,8 @@ pub fn rrt<T, FS, FE, FC,>(
     use_rrtstar: bool,
     rewire_radius: f64,
     max_iterations: u64,
+    max_duration: f64,
+    fast_return: bool
 ) -> Result<(Vec<T>, HashTree<T>), String>
 where
     T: Eq + Copy + Hash + Distance,
@@ -125,36 +130,48 @@ where
     FC: FnMut(&T, &T) -> bool,
 {
     let mut tree = HashTree::new(start.clone());
+    let start_time = Instant::now();
+    let duration_limit = Duration::from_secs_f64(max_duration);
 
     for _ in 0..max_iterations {
-        // Sample the grab the nearest point, and extend in that direction
+        // Have we timed out?
+        if start_time.elapsed() > duration_limit {
+            break;
+        }
+
+        // Sample the nearest point, and extend in that direction.
+        // If we end up with a non-connectable result try again.
         let (new_point, nearest) = match extend_tree(&tree, &mut sample, &mut extend, &mut connectable)
         {
             Some((new_point, nearest)) => (new_point, nearest),
             None => continue,
         };
 
+        // Then the child wasn't added for some reason so just try again
         if tree.add_child(&nearest, new_point).is_err() {
-            // Then the child wasn't added for some reason so just try again
             continue;
         }
 
+        // Optionally rewire the tree if using RRT*
         if use_rrtstar {
             rewire_tree(&mut tree, &mut connectable, &new_point, rewire_radius);
         }
 
-        // Are we there yet? If so return the path.
+        // If we have reached the goal ensure the link is added to the tree.
         if connectable(goal, &new_point) {
             let _ = tree.add_child(&new_point, *goal);
-            match tree.path(goal) {
-                Ok(path) => return Ok((path, tree)),
-                Err(e) => return Err(e),
+
+            // Then we're done.
+            if fast_return {
+                break;
             }
         }
     }
 
-    // Otherwise we've hit max_iter with finding success
-    Err("Failed to find a path".to_string())
+    match tree.path(goal) {
+        Ok(path) => return Ok((path, tree)),
+        Err(_) => return Err("Failed to find path between poses".into()),
+    }
 }
 
 //

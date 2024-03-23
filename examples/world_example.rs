@@ -207,9 +207,8 @@ fn visualize_rrt(
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 6 {
-        // Adjusted for the additional argument
-        eprintln!("Usage: program start_x start_y end_x end_y use_rrtstar");
+    if args.len() != 6 && args.len() != 7 {
+        eprintln!("Usage: program start_x start_y end_x end_y use_rrtstar [timeout]");
         return;
     }
 
@@ -220,12 +219,21 @@ pub fn main() {
     let use_rrtstar: bool = args[5]
         .parse()
         .expect("Invalid use_rrtstar argument; should be true or false");
+    let mut fast_return = true;
+    let mut timeout = 1000.0;
+    if args.len() == 7 {
+        fast_return = false;
+        timeout = args[6].parse().expect("Invalid timeout");
+    }
 
     let start = RobotPose::new(start_x, start_y);
     let goal = RobotPose::new(end_x, end_y);
 
     println!("Start pose: ({}, {})", start_x, start_y);
     println!("End pose: ({}, {})", end_x, end_y);
+    println!("use_rrtstar: {}", use_rrtstar);
+    println!("fast_return: {}", fast_return);
+    println!("timeout: {}", timeout);
 
     // Add a few rectangular obstacles to the world
     let obstacles = vec![
@@ -263,7 +271,9 @@ pub fn main() {
         connectable_fn,
         use_rrtstar,
         rewire_radius,
-        100000,
+        1000000,
+        timeout,
+        fast_return,
     );
     match result {
         Ok((path, tree)) => {

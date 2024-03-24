@@ -78,7 +78,7 @@ fn extend_2d(start: &Point2D, end: &Point2D, step_size: f64) -> Point2D {
     )
 }
 
-fn run_rrt(use_rrtstar: bool, start: &Point2D, goal: &Point2D, grid_size: f64) {
+fn run_rrt(use_rrtstar: bool, use_connect: bool, start: &Point2D, goal: &Point2D, grid_size: f64) {
     // Seed the generator for consistency
     let mut rng = StdRng::seed_from_u64(1);
     let step_size = 1.0;
@@ -100,6 +100,7 @@ fn run_rrt(use_rrtstar: bool, start: &Point2D, goal: &Point2D, grid_size: f64) {
         &connectable_fn,
         use_rrtstar,
         2.0,
+        use_connect,
         100000,
         10.0,
         true,
@@ -124,7 +125,7 @@ fn test_rrt() {
     let start = Point2D::new(1.0, 1.0);
     let end = Point2D::new(10.0, 10.0);
     let grid_size = 10.0;
-    run_rrt(false, &start, &end, grid_size);
+    run_rrt(false, false, &start, &end, grid_size);
 }
 
 #[test]
@@ -132,5 +133,13 @@ fn test_rrtstar() {
     let start = Point2D::new(1.0, 1.0);
     let end = Point2D::new(10.0, 10.0);
     let grid_size = 10.0;
-    run_rrt(true, &start, &end, grid_size);
+    run_rrt(true, false, &start, &end, grid_size);
+}
+
+#[test]
+fn test_rrtconnect() {
+    let start = Point2D::new(1.0, 1.0);
+    let end = Point2D::new(10.0, 10.0);
+    let grid_size = 10.0;
+    run_rrt(false, true, &start, &end, grid_size);
 }

@@ -134,7 +134,6 @@ fn visualize_rrt(
     world: &World,
     path: &Vec<RobotPose>,
     tree: &HashTree<RobotPose>,
-    algorithm: &str,
 ) {
     let mut plot = Plot::new();
 
@@ -194,7 +193,7 @@ fn visualize_rrt(
     plot.add_trace(end_trace);
 
     let layout = Layout::new()
-        .title(format!("{algorithm} Path Finding Result").as_str().into())
+        .title(format!("RRT Path Finding Result").as_str().into())
         .show_legend(false)
         .width(750)
         .height(750)
@@ -207,8 +206,8 @@ fn visualize_rrt(
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 6 && args.len() != 7 {
-        eprintln!("Usage: program start_x start_y end_x end_y use_rrtstar [timeout]");
+    if args.len() != 7 && args.len() != 8 {
+        eprintln!("Usage: program start_x start_y end_x end_y use_rrtstar use_rrtconnect [timeout]");
         return;
     }
 
@@ -219,21 +218,26 @@ pub fn main() {
     let use_rrtstar: bool = args[5]
         .parse()
         .expect("Invalid use_rrtstar argument; should be true or false");
+    let use_rrtconnect: bool = args[6]
+        .parse()
+        .expect("Invalid use_rrtconnect argument; should be true or false");
     let mut fast_return = true;
     let mut timeout = 1000.0;
-    if args.len() == 7 {
+    if args.len() == 8 {
         fast_return = false;
-        timeout = args[6].parse().expect("Invalid timeout");
+        timeout = args[7].parse().expect("Invalid timeout");
     }
 
     let start = RobotPose::new(start_x, start_y);
     let goal = RobotPose::new(end_x, end_y);
 
-    println!("Start pose: ({}, {})", start_x, start_y);
-    println!("End pose: ({}, {})", end_x, end_y);
-    println!("use_rrtstar: {}", use_rrtstar);
-    println!("fast_return: {}", fast_return);
-    println!("timeout: {}", timeout);
+    println!("Starting pathfinding with parameters:");
+    println!("  start pose: ({}, {})", start_x, start_y);
+    println!("  end pose: ({}, {})", end_x, end_y);
+    println!("  use_rrtstar: {}", use_rrtstar);
+    println!("  use_rrtconnect: {}", use_rrtconnect);
+    println!("  fast_return: {}", fast_return);
+    println!("  timeout: {}", timeout);
 
     // Add a few rectangular obstacles to the world
     let obstacles = vec![
@@ -256,13 +260,6 @@ pub fn main() {
     let connectable_fn =
         |from: &RobotPose, to: &RobotPose| world.connectable(from, to, buffer, rewire_radius);
 
-    let alg = if use_rrtstar {
-        println!("Finding path with RRT*");
-        "RRT*"
-    } else {
-        println!("Finding path with RRT");
-        "RRT"
-    };
     let result = rrt(
         &start,
         &goal,
@@ -271,6 +268,7 @@ pub fn main() {
         connectable_fn,
         use_rrtstar,
         rewire_radius,
+        use_rrtconnect,
         1000000,
         timeout,
         fast_return,
@@ -278,10 +276,10 @@ pub fn main() {
     match result {
         Ok((path, tree)) => {
             println!("Path found!");
-            visualize_rrt(&world, &path, &tree, alg)
+            visualize_rrt(&world, &path, &tree);
         }
         Err(e) => {
-            println!("RRT* failed: {}", e);
+            println!("RRT failed: {}", e);
         }
     }
 }

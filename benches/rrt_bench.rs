@@ -69,19 +69,21 @@ fn extend_2d(start: &Point2D, end: &Point2D, step_size: f64) -> Point2D {
     )
 }
 
-fn run_rrt(use_rrtstar: bool, start: &Point2D, goal: &Point2D, grid_size: f64) {
+fn run_rrt(
+    use_rrtstar: bool,
+    use_rrtconnect: bool,
+    start: &Point2D,
+    goal: &Point2D,
+    grid_size: f64,
+) {
     let mut rng = thread_rng();
     let step_size = 1.0;
     let rewire_radius = 3.0;
 
     // Define closures
-    let obstacle = Point2D::new(grid_size / 2.0, grid_size / 2.0); // All points except for ball in the center are valid
     let extend_fn = |start: &Point2D, end: &Point2D| extend_2d(start, end, step_size);
     let mut sample_fn = || sample_2d(&mut rng, grid_size, grid_size);
-    let connectable_fn = |start: &Point2D, end: &Point2D| {
-        end.distance(&obstacle) > 3.0 &&
-        start.distance(end) < rewire_radius
-    };
+    let connectable_fn = |start: &Point2D, end: &Point2D| start.distance(end) < rewire_radius;
 
     let result = rrt(
         start,
@@ -91,6 +93,7 @@ fn run_rrt(use_rrtstar: bool, start: &Point2D, goal: &Point2D, grid_size: f64) {
         &connectable_fn,
         use_rrtstar,
         rewire_radius,
+        use_rrtconnect,
         100000,
         10.0,
         true,
@@ -104,7 +107,7 @@ fn bench_rrt(c: &mut Criterion) {
     let end = Point2D::new(50.0, 50.0);
     let grid_size: f64 = 50.0;
     c.bench_function("rrt", |b| {
-        b.iter(|| run_rrt(false, &start, &end, grid_size))
+        b.iter(|| run_rrt(false, false, &start, &end, grid_size))
     });
 }
 
@@ -113,9 +116,18 @@ fn bench_rrtstar(c: &mut Criterion) {
     let end = Point2D::new(50.0, 50.0);
     let grid_size: f64 = 50.0;
     c.bench_function("rrtstar", |b| {
-        b.iter(|| run_rrt(true, &start, &end, grid_size))
+        b.iter(|| run_rrt(true, false, &start, &end, grid_size))
     });
 }
 
-criterion_group!(benches, bench_rrt, bench_rrtstar);
+fn bench_rrtconnect(c: &mut Criterion) {
+    let start = Point2D::new(1.0, 1.0);
+    let end = Point2D::new(50.0, 50.0);
+    let grid_size: f64 = 50.0;
+    c.bench_function("rrtconnect", |b| {
+        b.iter(|| run_rrt(false, true, &start, &end, grid_size))
+    });
+}
+
+criterion_group!(benches, bench_rrt, bench_rrtstar, bench_rrtconnect);
 criterion_main!(benches);

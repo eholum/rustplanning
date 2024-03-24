@@ -114,11 +114,10 @@ where
 /// - `start`: The reference to the starting pose of type `T`
 /// - `sample_fn`: Function to randomly sample the configuration space
 /// - `extend_fn`: Given two nodes, function to return an intermediate value between them
-/// - `connectable_fn`: Function to determine whether or not a link can be added between two nodes. If a sampled node is
-///                     connectable to the goal, we return success.
+/// - `connectable_fn`: Function to determine whether or not a link can be added between two nodes
 /// - `use_rrtstar`: Whether or not to use RRT*
 /// - `rewire_radius`: If using RRT*, the max distance to identify and rewire neighbors of newly added nodes
-/// - `use_rrtconnect`: Whether or not to use RRT connect
+/// - `use_rrtconnect`: Whether or not to use RRT-Connect
 /// - `max_iterations`: Maximum number of random samples to attempt before the search fails
 /// - `max_duration`: Maximum amount of time in seconds to find a solution
 /// - `fast_return`: Return as soon as a solution is found, or iterate until max_iterations or max_duration is reached
@@ -247,37 +246,22 @@ mod tests {
         let mut connectable_fn = |from: &i32, to: &i32| (to - from).abs() == 1;
 
         // The sample is right next to the nearest node, so it should connect directly
-        let (new_points, nearest) = extend_tree(
-            &tree,
-            2,
-            &mut extend_fn,
-            &mut connectable_fn,
-            false,
-        );
+        let (new_points, nearest) =
+            extend_tree(&tree, 2, &mut extend_fn, &mut connectable_fn, false);
         let nearest_path = vec![2];
         assert_eq!(nearest, 1);
         assert_eq!(new_points, nearest_path);
 
         // Extend the path by exactly 1
-        let (new_points, nearest) = extend_tree(
-            &tree,
-            3,
-            &mut extend_fn,
-            &mut connectable_fn,
-            false,
-        );
+        let (new_points, nearest) =
+            extend_tree(&tree, 3, &mut extend_fn, &mut connectable_fn, false);
         let nearest_path = vec![2];
         assert_eq!(nearest, 1);
         assert_eq!(new_points, nearest_path);
 
         // Connect all the way to the sample
-        let (new_points, nearest) = extend_tree(
-            &tree,
-            5,
-            &mut extend_fn,
-            &mut connectable_fn,
-            true,
-        );
+        let (new_points, nearest) =
+            extend_tree(&tree, 5, &mut extend_fn, &mut connectable_fn, true);
         let nearest_path = vec![2, 3, 4, 5];
         assert_eq!(nearest, 1);
         assert_eq!(new_points, nearest_path);
